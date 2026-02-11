@@ -1,0 +1,140 @@
+/**
+ * Abstracts a WebGL shader program and provides helpers to set uniforms.
+ *
+ * A Material owns a linked `WebGLProgram` built from vertex and fragment
+ * shader sources. It exposes typed `setUniform*` helpers so callers never
+ * need to look up uniform locations manually.
+ */
+
+import { createShader, createProgram } from './ShaderUtils';
+
+// ---------------------------------------------------------------------------
+// Default shaders
+// ---------------------------------------------------------------------------
+
+/** Minimal pass-through vertex shader. */
+export const DEFAULT_VERTEX_SOURCE = `#version 300 es
+layout(location = 0) in vec4 a_position;
+
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+
+void main() {
+  gl_Position = u_projection * u_view * u_model * a_position;
+}
+`;
+
+/** Solid-color fragment shader. */
+export const DEFAULT_FRAGMENT_SOURCE = `#version 300 es
+precision mediump float;
+
+uniform vec4 u_color;
+
+out vec4 fragColor;
+
+void main() {
+  fragColor = u_color;
+}
+`;
+
+// ---------------------------------------------------------------------------
+// Material class
+// ---------------------------------------------------------------------------
+
+export class Material {
+  public readonly program: WebGLProgram;
+
+  private readonly gl: WebGL2RenderingContext;
+  private readonly uniformLocations: Map<string, WebGLUniformLocation> = new Map();
+
+  /**
+   * Create a Material by compiling and linking the supplied shaders.
+   *
+   * @param gl WebGL 2 context
+   * @param vertexSource GLSL vertex shader source (defaults to a basic MVP shader)
+   * @param fragmentSource GLSL fragment shader source (defaults to a solid-color shader)
+   */
+  constructor(
+    gl: WebGL2RenderingContext,
+    vertexSource: string = DEFAULT_VERTEX_SOURCE,
+    fragmentSource: string = DEFAULT_FRAGMENT_SOURCE,
+  ) {
+    this.gl = gl;
+
+    const vs = createShader(gl, gl.VERTEX_SHADER, vertexSource);
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+    this.program = createProgram(gl, vs, fs);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Program activation
+  // ---------------------------------------------------------------------------
+
+  /** Bind this material's program as the active shader program. */
+  use(): void {
+    this.gl.useProgram(this.program);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Uniform setters
+  // ---------------------------------------------------------------------------
+
+  /** Set a `float` uniform. */
+  setFloat(name: string, value: number): void {
+    this.gl.uniform1f(this.location(name), value);
+  }
+
+  /** Set an `int` or `sampler` uniform. */
+  setInt(name: string, value: number): void {
+    this.gl.uniform1i(this.location(name), value);
+  }
+
+  /** Set a `vec2` uniform. */
+  setVec2(name: string, x: number, y: number): void {
+    this.gl.uniform2f(this.location(name), x, y);
+  }
+
+  /** Set a `vec3` uniform. */
+  setVec3(name: string, x: number, y: number, z: number): void {
+    this.gl.uniform3f(this.location(name), x, y, z);
+  }
+
+  /** Set a `vec4` uniform. */
+  setVec4(name: string, x: number, y: number, z: number, w: number): void {
+    this.gl.uniform4f(this.location(name), x, y, z, w);
+  }
+
+  /** Set a `mat4` uniform from a `Float32Array` (column-major). */
+  setMat4(name: string, value: Float32Array): void {
+    this.gl.uniformMatrix4fv(this.location(name), false, value);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cleanup
+  // ---------------------------------------------------------------------------
+
+  /** Delete the program from the GPU. */
+  dispose(): void {
+    this.gl.deleteProgram(this.program);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internals
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Lazily look up and cache a uniform location.
+   * Returns `null` for inactive/optimised-away uniforms (WebGL spec compliant).
+   */
+  private location(name: string): WebGLUniformLocation | null {
+    const cached = this.uniformLocations.get(name);
+    if (cached !== undefined) return cached;
+
+    const loc = this.gl.getUniformLocation(this.program, name);
+    if (loc !== null) {
+      this.uniformLocations.set(name, loc);
+    }
+    return loc;
+  }
+}

@@ -26,7 +26,7 @@ export class Renderer {
     this.resizeObserver.observe(this.canvas);
   }
 
-  /** Synchronise the drawing buffer size with the canvas CSS size. */
+  /** Synchronize the drawing buffer size with the canvas CSS size. */
   private resizeViewport(): void {
     const dpr = window.devicePixelRatio ?? 1;
     const width = Math.round(this.canvas.clientWidth * dpr);
@@ -40,7 +40,7 @@ export class Renderer {
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
-  /** Clear the framebuffer with the given RGBA colour. */
+  /** Clear the framebuffer with the given RGBA color. */
   clear(r: number, g: number, b: number, a: number = 1.0): void {
     this.gl.clearColor(r, g, b, a);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);

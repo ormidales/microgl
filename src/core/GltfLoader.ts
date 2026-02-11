@@ -239,7 +239,9 @@ export function readAccessorFloat(
   const componentCount = accessor.count * componentCountForType(accessor.type);
 
   // Fast path: tightly packed floats – just wrap
-  if (accessor.componentType === GL_FLOAT && (byteStride === 0 || byteStride === componentSizeBytes(accessor.componentType, accessor.type))) {
+  const expectedStride = componentSizeBytes(accessor.componentType, accessor.type);
+  const isTightlyPacked = byteStride === 0 || byteStride === expectedStride;
+  if (accessor.componentType === GL_FLOAT && isTightlyPacked) {
     return new Float32Array(data, byteOffset, componentCount);
   }
 

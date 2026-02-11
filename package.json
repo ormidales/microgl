@@ -1,0 +1,25 @@
+{
+  "name": "microgl",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Moteur de rendu 3D WebGL 2.0 minimaliste et performant.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ormidales/microgl.git"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "gl-matrix": "^3.4.4"
+  }
+}

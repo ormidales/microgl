@@ -14,15 +14,11 @@ export class RenderSystem extends System {
     const entities = em.getEntitiesWith(...this.requiredComponents);
 
     for (const id of entities) {
-      const transform = em.getComponent<TransformComponent>(id, 'Transform');
-      const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
+      const _transform = em.getComponent<TransformComponent>(id, 'Transform');
+      const _mesh = em.getComponent<MeshComponent>(id, 'Mesh');
 
-      if (transform && mesh) {
-        // Placeholder – a real implementation would issue WebGL draw calls.
-        console.debug(
-          `[RenderSystem] entity=${id} pos=(${transform.x},${transform.y},${transform.z}) verts=${mesh.vertices.length}`,
-        );
-      }
+      // Placeholder – a real implementation would issue WebGL draw calls
+      // using _transform and _mesh data.
     }
   }
 }

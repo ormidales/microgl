@@ -125,6 +125,11 @@ export class EntityManager {
   private getBit(componentType: string): number {
     let bit = this.componentBits.get(componentType);
     if (bit === undefined) {
+      if (this.nextBit >= 31) {
+        throw new Error(
+          `EntityManager: exceeded maximum of 31 distinct component types.`,
+        );
+      }
       bit = 1 << this.nextBit++;
       this.componentBits.set(componentType, bit);
     }

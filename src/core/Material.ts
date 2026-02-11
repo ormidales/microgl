@@ -125,7 +125,7 @@ export class Material {
 
   /**
    * Lazily look up and cache a uniform location.
-   * Returns `null` for inactive/optimised-away uniforms (WebGL spec compliant).
+   * Returns `null` for inactive/optimized-away uniforms (WebGL spec compliant).
    */
   private location(name: string): WebGLUniformLocation | null {
     const cached = this.uniformLocations.get(name);

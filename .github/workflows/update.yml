@@ -13,21 +13,21 @@ jobs:
   update-dependencies:
     runs-on: ubuntu-latest
     steps:
-      - name: Vérifier le répertoire
+      - name: Vérification du répertoire
         uses: actions/checkout@v4
 
-      - name: Node.js
+      - name: Mise en place de Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      - name: Installer les dépendances
+      - name: Installation des dépendances
         run: npm ci
 
-      - name: Mettre à jour les dépendances
+      - name: Mise à jour des dépendances
         run: npm update
 
-      - name: Vérifier les modifications
+      - name: Vérification des modifications
         id: check_changes
         run: |
           if [[ -n $(git status --porcelain) ]]; then

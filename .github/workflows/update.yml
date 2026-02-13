@@ -48,12 +48,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git checkout -b "$BRANCH_NAME"
-          git add package.json package-lock.json
+          git add .
           git commit -m "chore: update dependencies $TIMESTAMP"
           git push origin "$BRANCH_NAME"
           
           gh pr create \
             --title "Mise à jour des dépendances | $TIMESTAMP" \
-            --body "Mise à jour automatique des dépendances, effectué par @github-actions." \
+            --body "Mise à jour automatique des dépendances effectuée par @github-actions." \
             --head "$BRANCH_NAME" \
             --base main

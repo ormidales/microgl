@@ -10,7 +10,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  update-dependencies:
+  update:
     runs-on: ubuntu-latest
     steps:
       - name: Vérification du répertoire
@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TIMESTAMP=$(date +'%d-%m-%Y-%H-%M-%S')
-          BRANCH_NAME="dependencies-update-$TIMESTAMP"
+          BRANCH_NAME="github-actions-update-$TIMESTAMP"
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

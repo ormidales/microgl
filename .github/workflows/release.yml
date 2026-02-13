@@ -12,15 +12,15 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Vérifier le répertoire
+      - name: Vérification du répertoire
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Calculation de la nouvelle version
+      - name: Calcul de la version
         id: next_version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
           VERSION_PJ=${LATEST_TAG#v}
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_PJ"
           NEW_PATCH=$((PATCH + 1))

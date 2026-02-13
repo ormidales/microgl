@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Vérification du répertoire

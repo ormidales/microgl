@@ -1,0 +1,30 @@
+name: Intégration Continue
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Vérification du répertoire
+        uses: actions/checkout@v4
+
+      - name: Mise en place de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Construction du projet
+        run: npm run build
+
+      - name: Exécution des tests
+        run: npm run test

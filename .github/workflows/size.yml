@@ -1,0 +1,30 @@
+name: Taille du Bundle
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  analyze-bundle-size:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mise en place de Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Installation et Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Rapport de taille (via compressed-size-action)
+        uses: preactjs/compressed-size-action@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pattern: "dist/**/*.{js,css,html}"
+          exclude: "**/*.map"

@@ -1,0 +1,59 @@
+name: Mise à jour des dépendances
+
+on:
+  schedule:
+    - cron: '0 6,12,18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Vérifier le répertoire
+        uses: actions/checkout@v4
+
+      - name: Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Mettre à jour les dépendances
+        run: npm update
+
+      - name: Vérifier les modifications
+        id: check_changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Création de la Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TIMESTAMP=$(date +'%d-%m-%Y-%H-%M-%S')
+          BRANCH_NAME="dependencies-update-$TIMESTAMP"
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git checkout -b "$BRANCH_NAME"
+          git add package.json package-lock.json
+          git commit -m "chore: update dependencies $TIMESTAMP"
+          git push origin "$BRANCH_NAME"
+          
+          gh pr create \
+            --title "Mise à jour des dépendances | $TIMESTAMP" \
+            --body "Mise à jour automatique des dépendances, effectué par @github-actions." \
+            --head "$BRANCH_NAME" \
+            --base main

@@ -194,11 +194,12 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
   for (const mesh of json.meshes ?? []) {
     for (let pi = 0; pi < mesh.primitives.length; pi++) {
       const prim = mesh.primitives[pi];
+      const positionAccessorIndex = prim.attributes['POSITION'];
 
       const positions = readAccessorFloat(
         json,
         buffers,
-        prim.attributes['POSITION'],
+        positionAccessorIndex,
       );
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
@@ -213,8 +214,13 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const name = mesh.name
         ? (mesh.primitives.length > 1 ? `${mesh.name}_${pi}` : mesh.name)
         : `mesh_${result.length}`;
+      const positionAccessor = positionAccessorIndex !== undefined
+        ? getAccessor(json, positionAccessorIndex)
+        : undefined;
+      const min = positionAccessor?.min ?? [];
+      const max = positionAccessor?.max ?? [];
 
-      result.push({ name, positions, normals, uvs, indices });
+      result.push({ name, positions, normals, uvs, indices, min, max });
     }
   }
 

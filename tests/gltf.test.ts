@@ -556,6 +556,19 @@ describe('loadGltf', () => {
     expect(result.meshes[0].indices.length).toBe(0);
     expect(result.meshes[0].positions.length).toBe(9);
   });
+
+  it('propagates POSITION accessor min/max bounds', async () => {
+    const { json, bin } = triangleAsset();
+    json.accessors![0].min = [0, 0, 0];
+    json.accessors![0].max = [1, 1, 0];
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].min).toEqual([0, 0, 0]);
+    expect(result.meshes[0].max).toEqual([1, 1, 0]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -567,6 +580,8 @@ describe('MeshComponent with normals and uvs', () => {
     const m = new MeshComponent();
     expect(m.normals.length).toBe(0);
     expect(m.uvs.length).toBe(0);
+    expect(m.min).toEqual([]);
+    expect(m.max).toEqual([]);
   });
 
   it('accepts normals and uvs in constructor', () => {
@@ -575,8 +590,12 @@ describe('MeshComponent with normals and uvs', () => {
       new Uint16Array([0]),
       new Float32Array([0, 0, 1]),
       new Float32Array([0.5, 0.5]),
+      [0, 0, 0],
+      [1, 1, 1],
     );
     expect(m.normals.length).toBe(3);
     expect(m.uvs.length).toBe(2);
+    expect(m.min).toEqual([0, 0, 0]);
+    expect(m.max).toEqual([1, 1, 1]);
   });
 });

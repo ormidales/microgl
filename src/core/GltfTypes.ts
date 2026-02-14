@@ -107,6 +107,8 @@ export interface ParsedMesh {
   normals: Float32Array;
   uvs: Float32Array;
   indices: Uint16Array;
+  min: number[];
+  max: number[];
 }
 
 /** Result of loading and parsing an entire glTF asset. */

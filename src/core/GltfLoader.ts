@@ -237,11 +237,12 @@ export function readAccessorFloat(
   if (accessorIndex === undefined) return new Float32Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
-  const { data, byteOffset, byteStride } = getBufferSlice(json, buffers, accessor);
+  const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
   const componentCount = accessor.count * componentCountForType(accessor.type);
+  const { elementSize, componentOffsets } = getAccessorElementLayout(accessor.componentType, accessor.type);
 
   // Fast path: tightly packed floats – just wrap
-  const expectedStride = componentSizeBytes(accessor.componentType, accessor.type);
+  const expectedStride = elementSize;
   const isTightlyPacked = byteStride === 0 || byteStride === expectedStride;
   if (accessor.componentType === GL_FLOAT && isTightlyPacked) {
     return new Float32Array(data, byteOffset, componentCount);
@@ -249,7 +250,11 @@ export function readAccessorFloat(
 
   // Slow path: stride or type conversion
   const elemSize = componentCountForType(accessor.type);
-  const stride = byteStride || elemSize * bytesPerComponent(accessor.componentType);
+  const stride = byteStride || expectedStride;
+  const requiredBytes = accessor.count === 0 ? 0 : (accessor.count - 1) * stride + elementSize;
+  if (requiredBytes > byteLength) {
+    throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
+  }
   const out = new Float32Array(componentCount);
   const view = new DataView(data);
   let outIdx = 0;
@@ -257,7 +262,7 @@ export function readAccessorFloat(
   for (let i = 0; i < accessor.count; i++) {
     const base = byteOffset + i * stride;
     for (let c = 0; c < elemSize; c++) {
-      out[outIdx++] = readComponent(view, base + c * bytesPerComponent(accessor.componentType), accessor.componentType);
+      out[outIdx++] = readComponent(view, base + componentOffsets[c], accessor.componentType);
     }
   }
 
@@ -276,13 +281,13 @@ export function readAccessorUint16(
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
-  const { data, byteOffset, byteStride } = getBufferSlice(json, buffers, accessor);
+  const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
 
   const count = accessor.count;
   const bpc = bytesPerComponent(accessor.componentType);
   const stride = byteStride || bpc;
   const requiredBytes = count === 0 ? 0 : (count - 1) * stride + bpc;
-  if (byteOffset + requiredBytes > data.byteLength) {
+  if (requiredBytes > byteLength) {
     throw new Error(`Index accessor ${accessorIndex} exceeds available buffer bounds.`);
   }
 
@@ -322,7 +327,7 @@ function getBufferSlice(
   json: GltfAsset,
   buffers: ArrayBuffer[],
   accessor: GltfAccessor,
-): { data: ArrayBuffer; byteOffset: number; byteStride: number } {
+): { data: ArrayBuffer; byteOffset: number; byteStride: number; byteLength: number } {
   const bvIndex = accessor.bufferView;
   if (bvIndex === undefined) {
     throw new Error('Accessors without a bufferView are not supported.');
@@ -333,10 +338,12 @@ function getBufferSlice(
   const data = buffers[bv.buffer];
   if (!data) throw new Error(`Buffer ${bv.buffer} not resolved.`);
 
-  const byteOffset = (bv.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+  const accessorByteOffset = accessor.byteOffset ?? 0;
+  const byteOffset = (bv.byteOffset ?? 0) + accessorByteOffset;
   const byteStride = bv.byteStride ?? 0;
+  const byteLength = bv.byteLength - accessorByteOffset;
 
-  return { data, byteOffset, byteStride };
+  return { data, byteOffset, byteStride, byteLength };
 }
 
 function readComponent(view: DataView, offset: number, componentType: number): number {
@@ -376,6 +383,22 @@ function componentCountForType(type: string): number {
   }
 }
 
-function componentSizeBytes(componentType: number, type: string): number {
-  return bytesPerComponent(componentType) * componentCountForType(type);
+function getAccessorElementLayout(componentType: number, type: string): { elementSize: number; componentOffsets: number[] } {
+  const bpc = bytesPerComponent(componentType);
+  if (type === 'MAT2' || type === 'MAT3' || type === 'MAT4') {
+    const rows = type === 'MAT2' ? 2 : type === 'MAT3' ? 3 : 4;
+    const cols = rows;
+    const columnStride = Math.ceil((rows * bpc) / 4) * 4;
+    const componentOffsets: number[] = [];
+    for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < rows; row++) {
+        componentOffsets.push(col * columnStride + row * bpc);
+      }
+    }
+    return { elementSize: cols * columnStride, componentOffsets };
+  }
+
+  const componentCount = componentCountForType(type);
+  const componentOffsets = Array.from({ length: componentCount }, (_, idx) => idx * bpc);
+  return { elementSize: componentCount * bpc, componentOffsets };
 }

@@ -81,10 +81,25 @@ describe('Renderer', () => {
     expect(onRestored).toHaveBeenCalledWith(gl2);
   });
 
-  it('ignores viewport resize when canvas dimensions are zero', () => {
+  it('ignores viewport resize when canvas width is zero', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     canvas.clientWidth = 0;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+
+    expect(gl.viewport).not.toHaveBeenCalled();
+  });
+
+  it('ignores viewport resize when canvas height is zero', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientHeight = 0;
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
 
     vi.stubGlobal('window', { devicePixelRatio: 1 });

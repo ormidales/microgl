@@ -29,6 +29,7 @@ import {
 const GLB_MAGIC = 0x46546C67; // "glTF"
 const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
+const UTF8_DECODER = new TextDecoder();
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -76,7 +77,7 @@ export function parseContainer(buffer: ArrayBuffer): {
   }
 
   // Treat the whole buffer as UTF-8 JSON
-  const text = new TextDecoder().decode(buffer);
+  const text = UTF8_DECODER.decode(buffer);
   const json = JSON.parse(text) as GltfAsset;
   return { json, binChunk: undefined };
 }
@@ -108,7 +109,7 @@ function parseGlb(buffer: ArrayBuffer): {
     const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLength);
 
     if (chunkType === GLB_CHUNK_JSON) {
-      const text = new TextDecoder().decode(chunkData);
+      const text = UTF8_DECODER.decode(chunkData);
       json = JSON.parse(text) as GltfAsset;
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;

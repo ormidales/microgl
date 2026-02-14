@@ -281,6 +281,10 @@ export function readAccessorUint16(
   const count = accessor.count;
   const bpc = bytesPerComponent(accessor.componentType);
   const stride = byteStride || bpc;
+  const requiredBytes = count === 0 ? 0 : (count - 1) * stride + bpc;
+  if (byteOffset + requiredBytes > data.byteLength) {
+    throw new Error(`Index accessor ${accessorIndex} exceeds available buffer bounds.`);
+  }
 
   // Fast path: tightly packed unsigned shorts
   if (accessor.componentType === GL_UNSIGNED_SHORT && stride === 2) {

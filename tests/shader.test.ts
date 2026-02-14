@@ -217,6 +217,37 @@ describe('ShaderCache', () => {
     expect(gl.deleteProgram).toHaveBeenCalled();
     expect(gl.deleteShader).toHaveBeenCalled();
   });
+
+  it('removeProgram deletes only the targeted program resources', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    const programA = cache.getProgram('vert-a', 'frag-a', 'prog-a');
+    const programB = cache.getProgram('vert-b', 'frag-b', 'prog-b');
+
+    cache.removeProgram('prog-b');
+
+    expect(gl.deleteProgram).toHaveBeenCalledWith(programB);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+
+    expect(cache.getProgram('vert-a', 'frag-a', 'prog-a')).toBe(programA);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+    expect(cache.getProgram('vert-b', 'frag-b', 'prog-b')).not.toBe(programB);
+    expect(gl.createProgram).toHaveBeenCalledTimes(3);
+  });
+
+  it('removeProgram is a no-op for missing keys', () => {
+    cache.removeProgram('does-not-exist');
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+    expect(gl.deleteShader).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

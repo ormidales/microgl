@@ -180,6 +180,6 @@ export class OrbitalCameraSystem extends System {
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    this.deltaZoom += e.deltaY * this.zoomSensitivity;
+    this.deltaZoom += Math.sign(e.deltaY) * this.zoomSensitivity;
   }
 }

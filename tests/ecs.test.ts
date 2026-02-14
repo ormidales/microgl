@@ -146,6 +146,18 @@ describe('RenderSystem', () => {
     } as unknown as WebGL2RenderingContext;
   }
 
+  function createMockMaterial() {
+    return { use: vi.fn(), setVec4: vi.fn(), setMat4: vi.fn() };
+  }
+
+  function createRenderSystemWithMocks() {
+    const gl = createMockGL();
+    const material = createMockMaterial();
+    const renderer = { gl };
+    const sys = new RenderSystem(renderer as any, material as any);
+    return { gl, material, sys };
+  }
+
   it('declares required components', () => {
     const sys = new RenderSystem();
     expect(sys.requiredComponents).toEqual(['Transform', 'Mesh']);
@@ -167,13 +179,7 @@ describe('RenderSystem', () => {
     em.addComponent(id, new TransformComponent());
     em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
 
-    const gl = createMockGL();
-    const material = { use: vi.fn(), setMat4: vi.fn() };
-    const renderer = { gl };
-    const sys = new RenderSystem(
-      renderer as unknown as ConstructorParameters<typeof RenderSystem>[0],
-      material as unknown as ConstructorParameters<typeof RenderSystem>[1],
-    );
+    const { gl, material, sys } = createRenderSystemWithMocks();
 
     sys.update(em, 0.016);
 
@@ -194,13 +200,7 @@ describe('RenderSystem', () => {
       ),
     );
 
-    const gl = createMockGL();
-    const material = { use: vi.fn(), setMat4: vi.fn() };
-    const renderer = { gl };
-    const sys = new RenderSystem(
-      renderer as unknown as ConstructorParameters<typeof RenderSystem>[0],
-      material as unknown as ConstructorParameters<typeof RenderSystem>[1],
-    );
+    const { gl, sys } = createRenderSystemWithMocks();
 
     sys.update(em, 0.016);
 

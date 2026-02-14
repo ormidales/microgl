@@ -165,6 +165,18 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).toThrow(/Unsupported GLB version/);
   });
 
+  it('throws when GLB chunk length is zero', () => {
+    const glb = new ArrayBuffer(20);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true); // magic
+    view.setUint32(4, 2, true);          // version 2
+    view.setUint32(8, 20, true);
+    view.setUint32(12, 0, true);         // chunk length
+    view.setUint32(16, 0x4E4F534A, true); // JSON
+
+    expect(() => parseContainer(glb)).toThrow(/Invalid chunk length/);
+  });
+
   it('throws when GLB has no JSON chunk', () => {
     // Build a GLB header with no chunks following
     const glb = new ArrayBuffer(12);

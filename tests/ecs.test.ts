@@ -54,6 +54,15 @@ describe('EntityManager', () => {
     expect(em.getComponent(id, 'Transform')).toBeUndefined();
   });
 
+  it('prunes empty component store on removeComponent', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.removeComponent(id, 'Transform');
+
+    expect((em as any).stores.has('Transform')).toBe(false);
+  });
+
   it('getEntitiesWith filters by bitmask', () => {
     const em = new EntityManager();
     const a = em.createEntity();
@@ -85,6 +94,15 @@ describe('EntityManager', () => {
   it('destroyEntity is a no-op for unknown ids', () => {
     const em = new EntityManager();
     expect(() => em.destroyEntity(42)).not.toThrow();
+  });
+
+  it('prunes empty component stores on destroyEntity', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.destroyEntity(id);
+
+    expect((em as any).stores.has('Transform')).toBe(false);
   });
 
   it('supports more than 31 distinct component types', () => {

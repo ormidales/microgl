@@ -37,8 +37,11 @@ export class EntityManager {
     if (!this.entities.has(id)) return;
 
     // Remove from every component store
-    for (const store of this.stores.values()) {
+    for (const [componentType, store] of this.stores) {
       store.delete(id);
+      if (store.size === 0) {
+        this.stores.delete(componentType);
+      }
     }
     this.signatures.delete(id);
     this.entities.delete(id);
@@ -73,6 +76,9 @@ export class EntityManager {
     const store = this.stores.get(componentType);
     if (store) {
       store.delete(id);
+      if (store.size === 0) {
+        this.stores.delete(componentType);
+      }
     }
 
     this.signatures.get(id)?.delete(componentType);

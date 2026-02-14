@@ -320,4 +320,50 @@ describe('OrbitalCameraSystem', () => {
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
+
+  it('applies touch drag input to orbital angles', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    cam.phi = 2;
+    em.addComponent(id, cam);
+
+    const listeners = new Map<string, EventListener>();
+    const canvas = {
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        listeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn((type: string) => {
+        listeners.delete(type);
+      }),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const start = listeners.get('touchstart');
+    const move = listeners.get('touchmove');
+    const end = listeners.get('touchend');
+    expect(start).toBeDefined();
+    expect(move).toBeDefined();
+    expect(end).toBeDefined();
+
+    start?.({
+      touches: [{ clientX: 10, clientY: 20 }],
+    } as unknown as Event);
+    const preventDefault = vi.fn();
+    move?.({
+      touches: [{ clientX: 12, clientY: 23 }],
+      preventDefault,
+    } as unknown as Event);
+    end?.({} as Event);
+
+    sys.update(em, 0.016);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(cam.theta).toBeCloseTo(-0.2);
+    expect(cam.phi).toBeCloseTo(1.7);
+  });
 });

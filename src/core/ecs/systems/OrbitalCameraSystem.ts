@@ -47,6 +47,9 @@ export class OrbitalCameraSystem extends System {
   private readonly onMouseDown = this.handleMouseDown.bind(this);
   private readonly onMouseMove = this.handleMouseMove.bind(this);
   private readonly onMouseUp = this.handleMouseUp.bind(this);
+  private readonly onTouchStart = this.handleTouchStart.bind(this);
+  private readonly onTouchMove = this.handleTouchMove.bind(this);
+  private readonly onTouchEnd = this.handleTouchEnd.bind(this);
   private readonly onWheel = this.handleWheel.bind(this);
 
   // ---------------------------------------------------------------------------
@@ -60,6 +63,9 @@ export class OrbitalCameraSystem extends System {
     canvas.addEventListener('mousedown', this.onMouseDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
     canvas.addEventListener('mouseup', this.onMouseUp);
+    canvas.addEventListener('touchstart', this.onTouchStart);
+    canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.onTouchEnd);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
@@ -69,6 +75,9 @@ export class OrbitalCameraSystem extends System {
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.canvas = null;
   }
@@ -143,6 +152,29 @@ export class OrbitalCameraSystem extends System {
 
   private handleMouseUp(e: MouseEvent): void {
     if (e.button !== 0) return;
+    this.dragging = false;
+  }
+
+  private handleTouchStart(e: TouchEvent): void {
+    if (e.touches.length !== 1) return;
+    this.dragging = true;
+    this.lastX = e.touches[0].clientX;
+    this.lastY = e.touches[0].clientY;
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    if (!this.dragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    const dx = e.touches[0].clientX - this.lastX;
+    const dy = e.touches[0].clientY - this.lastY;
+    this.lastX = e.touches[0].clientX;
+    this.lastY = e.touches[0].clientY;
+
+    this.deltaTheta -= dx * this.rotateSensitivity;
+    this.deltaPhi -= dy * this.rotateSensitivity;
+  }
+
+  private handleTouchEnd(_e: TouchEvent): void {
     this.dragging = false;
   }
 

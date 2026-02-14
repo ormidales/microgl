@@ -19,6 +19,13 @@ const em = new EntityManager();
 const renderSystem = new RenderSystem(renderer, material);
 const cameraSystem = new OrbitalCameraSystem();
 cameraSystem.attach(renderer.canvas);
+renderer.onContextLost(() => {
+  renderSystem.resetGpuResources();
+});
+renderer.onContextRestored((gl) => {
+  material.restore(gl);
+  renderSystem.resetGpuResources();
+});
 
 // Create a camera entity
 const camera = em.createEntity();

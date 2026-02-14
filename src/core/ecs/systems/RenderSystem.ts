@@ -15,7 +15,7 @@ export class RenderSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
   private readonly identity = mat4.create();
   private readonly model = mat4.create();
-  private readonly meshBuffers = new WeakMap<
+  private meshBuffers = new WeakMap<
     MeshComponent,
     { vao: WebGLVertexArrayObject; vertexCount: number; indexCount: number }
   >();
@@ -113,5 +113,10 @@ export class RenderSystem extends System {
       }
       gl.bindVertexArray(null);
     }
+  }
+
+  /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
+  resetGpuResources(): void {
+    this.meshBuffers = new WeakMap();
   }
 }

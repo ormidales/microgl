@@ -288,6 +288,18 @@ describe('Material', () => {
     mat.dispose();
     expect(gl.deleteProgram).toHaveBeenCalledWith(mat.program);
   });
+
+  it('restore rebuilds program and clears uniform cache', () => {
+    const mat = new Material(gl);
+    mat.setFloat('u_time', 1.0);
+    mat.restore();
+    mat.setFloat('u_time', 2.0);
+
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+    const calls = (gl.getUniformLocation as ReturnType<typeof vi.fn>).mock.calls
+      .filter((c: unknown[]) => c[1] === 'u_time');
+    expect(calls.length).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

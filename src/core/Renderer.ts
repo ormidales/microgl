@@ -3,9 +3,11 @@
  */
 export class Renderer {
   public readonly canvas: HTMLCanvasElement;
-  public readonly gl: WebGL2RenderingContext;
+  public gl: WebGL2RenderingContext;
 
   private resizeObserver: ResizeObserver;
+  private readonly contextLostHandlers: Set<() => void> = new Set();
+  private readonly contextRestoredHandlers: Set<(gl: WebGL2RenderingContext) => void> = new Set();
 
   constructor(container: HTMLElement = document.body) {
     this.canvas = document.createElement('canvas');
@@ -19,6 +21,8 @@ export class Renderer {
       throw new Error('WebGL 2 is not supported by this browser.');
     }
     this.gl = ctx;
+    this.canvas.addEventListener('webglcontextlost', this.handleContextLost);
+    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
 
     this.resizeViewport();
 
@@ -46,9 +50,43 @@ export class Renderer {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
+  onContextLost(handler: () => void): () => void {
+    this.contextLostHandlers.add(handler);
+    return () => this.contextLostHandlers.delete(handler);
+  }
+
+  onContextRestored(handler: (gl: WebGL2RenderingContext) => void): () => void {
+    this.contextRestoredHandlers.add(handler);
+    return () => this.contextRestoredHandlers.delete(handler);
+  }
+
   /** Stop observing resize events and remove the canvas. */
   dispose(): void {
     this.resizeObserver.disconnect();
+    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.contextLostHandlers.clear();
+    this.contextRestoredHandlers.clear();
     this.canvas.remove();
   }
+
+  private readonly handleContextLost = (event: Event): void => {
+    event.preventDefault();
+    for (const handler of this.contextLostHandlers) {
+      handler();
+    }
+  };
+
+  private readonly handleContextRestored = (): void => {
+    const ctx = this.canvas.getContext('webgl2');
+    if (!ctx) {
+      throw new Error('Failed to restore WebGL 2 context.');
+    }
+
+    this.gl = ctx;
+    this.resizeViewport();
+    for (const handler of this.contextRestoredHandlers) {
+      handler(ctx);
+    }
+  };
 }

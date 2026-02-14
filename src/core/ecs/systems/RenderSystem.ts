@@ -115,6 +115,7 @@ export class RenderSystem extends System {
     }
   }
 
+  /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
   resetGpuResources(): void {
     this.meshBuffers = new WeakMap();
   }

@@ -50,11 +50,13 @@ export class Renderer {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
+  /** Register a callback invoked when the WebGL context is lost. Returns an unsubscribe function. */
   onContextLost(handler: () => void): () => void {
     this.contextLostHandlers.add(handler);
     return () => this.contextLostHandlers.delete(handler);
   }
 
+  /** Register a callback invoked after the WebGL context is restored. Returns an unsubscribe function. */
   onContextRestored(handler: (gl: WebGL2RenderingContext) => void): () => void {
     this.contextRestoredHandlers.add(handler);
     return () => this.contextRestoredHandlers.delete(handler);

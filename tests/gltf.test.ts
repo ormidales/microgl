@@ -291,6 +291,20 @@ describe('readAccessorUint16', () => {
     const result = readAccessorUint16(json, [], undefined);
     expect(result.length).toBe(0);
   });
+
+  it('throws when index accessor count exceeds buffer bounds', () => {
+    const bin = new Uint16Array([0, 1, 2]).buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_SHORT, count: 4, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      buffers: [{ byteLength: 6 }],
+    };
+
+    expect(() => readAccessorUint16(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
 });
 
 // ---------------------------------------------------------------------------

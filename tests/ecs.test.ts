@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
 import { TransformComponent } from '../src/core/ecs/components/TransformComponent';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
@@ -124,6 +124,28 @@ describe('MeshComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('RenderSystem', () => {
+  function createMockGL(): WebGL2RenderingContext {
+    return {
+      ARRAY_BUFFER: 0x8892,
+      ELEMENT_ARRAY_BUFFER: 0x8893,
+      STATIC_DRAW: 0x88E4,
+      FLOAT: 0x1406,
+      TRIANGLES: 0x0004,
+      UNSIGNED_SHORT: 0x1403,
+      createVertexArray: vi.fn(() => ({} as WebGLVertexArrayObject)),
+      createBuffer: vi.fn(() => ({} as WebGLBuffer)),
+      bindVertexArray: vi.fn(),
+      bindBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      drawArrays: vi.fn(),
+      drawElements: vi.fn(),
+      deleteBuffer: vi.fn(),
+      deleteVertexArray: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+  }
+
   it('declares required components', () => {
     const sys = new RenderSystem();
     expect(sys.requiredComponents).toEqual(['Transform', 'Mesh']);
@@ -137,6 +159,57 @@ describe('RenderSystem', () => {
 
     const sys = new RenderSystem();
     expect(() => sys.update(em, 0.016)).not.toThrow();
+  });
+
+  it('issues drawArrays for non-indexed meshes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+
+    const gl = createMockGL();
+    const material = { use: vi.fn(), setMat4: vi.fn() };
+    const renderer = { gl };
+    const sys = new RenderSystem(
+      renderer as unknown as ConstructorParameters<typeof RenderSystem>[0],
+      material as unknown as ConstructorParameters<typeof RenderSystem>[1],
+    );
+
+    sys.update(em, 0.016);
+
+    expect(material.use).toHaveBeenCalled();
+    expect(material.setMat4).toHaveBeenCalledWith('u_model', expect.any(Float32Array));
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
+  });
+
+  it('issues drawElements for indexed meshes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+      ),
+    );
+
+    const gl = createMockGL();
+    const material = { use: vi.fn(), setMat4: vi.fn() };
+    const renderer = { gl };
+    const sys = new RenderSystem(
+      renderer as unknown as ConstructorParameters<typeof RenderSystem>[0],
+      material as unknown as ConstructorParameters<typeof RenderSystem>[1],
+    );
+
+    sys.update(em, 0.016);
+
+    expect(gl.drawElements).toHaveBeenCalledWith(
+      gl.TRIANGLES,
+      3,
+      gl.UNSIGNED_SHORT,
+      0,
+    );
   });
 });
 

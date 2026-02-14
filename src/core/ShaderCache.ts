@@ -11,6 +11,10 @@ export class ShaderCache {
 
   /** key → linked WebGLProgram */
   private readonly programs: Map<string, WebGLProgram> = new Map();
+  /** program key → shader cache keys used by this program */
+  private readonly programShaders: Map<string, [string, string]> = new Map();
+  /** shader key → number of programs currently referencing it */
+  private readonly shaderRefCounts: Map<string, number> = new Map();
 
   private readonly gl: WebGL2RenderingContext;
 
@@ -52,11 +56,46 @@ export class ShaderCache {
     const existing = this.programs.get(cacheKey);
     if (existing) return existing;
 
-    const vs = this.getShader(this.gl.VERTEX_SHADER, vertexSource);
-    const fs = this.getShader(this.gl.FRAGMENT_SHADER, fragmentSource);
+    const vertexShaderKey = vertexSource;
+    const fragmentShaderKey = fragmentSource;
+    const vs = this.getShader(this.gl.VERTEX_SHADER, vertexSource, vertexShaderKey);
+    const fs = this.getShader(this.gl.FRAGMENT_SHADER, fragmentSource, fragmentShaderKey);
     const program = createProgram(this.gl, vs, fs);
     this.programs.set(cacheKey, program);
+    this.programShaders.set(cacheKey, [vertexShaderKey, fragmentShaderKey]);
+    this.shaderRefCounts.set(vertexShaderKey, (this.shaderRefCounts.get(vertexShaderKey) ?? 0) + 1);
+    this.shaderRefCounts.set(fragmentShaderKey, (this.shaderRefCounts.get(fragmentShaderKey) ?? 0) + 1);
     return program;
+  }
+
+  /**
+   * Delete one cached program and any orphaned shaders that were only used by it.
+   *
+   * @param key Program cache key
+   */
+  removeProgram(key: string): void {
+    const program = this.programs.get(key);
+    if (!program) return;
+
+    this.gl.deleteProgram(program);
+    this.programs.delete(key);
+
+    const shaderKeys = this.programShaders.get(key);
+    if (!shaderKeys) return;
+    this.programShaders.delete(key);
+
+    for (const shaderKey of shaderKeys) {
+      const refCount = (this.shaderRefCounts.get(shaderKey) ?? 0) - 1;
+      if (refCount > 0) {
+        this.shaderRefCounts.set(shaderKey, refCount);
+        continue;
+      }
+      this.shaderRefCounts.delete(shaderKey);
+      const shader = this.shaders.get(shaderKey);
+      if (!shader) continue;
+      this.gl.deleteShader(shader);
+      this.shaders.delete(shaderKey);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -72,6 +111,8 @@ export class ShaderCache {
       this.gl.deleteShader(shader);
     }
     this.programs.clear();
+    this.programShaders.clear();
+    this.shaderRefCounts.clear();
     this.shaders.clear();
   }
 }

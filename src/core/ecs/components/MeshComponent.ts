@@ -2,6 +2,7 @@ import type { Component } from '../types';
 
 /**
  * Holds the geometry data (vertex positions and optional indices) for an entity.
+ * Stores optional POSITION accessor bounds for future spatial culling.
  */
 export class MeshComponent implements Component {
   public readonly type = 'Mesh';

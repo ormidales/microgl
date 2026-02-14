@@ -107,7 +107,9 @@ export interface ParsedMesh {
   normals: Float32Array;
   uvs: Float32Array;
   indices: Uint16Array;
+  /** Axis-aligned bounds minimum from the POSITION accessor (typically XYZ). */
   min: number[];
+  /** Axis-aligned bounds maximum from the POSITION accessor (typically XYZ). */
   max: number[];
 }
 

@@ -33,7 +33,7 @@ describe('Time', () => {
     expect(time.deltaTime).toBe(0.02);
   });
 
-  it('keeps first update at zero after pause/resume before start', () => {
+  it('keeps deltaTime at zero for first update after pausing before any updates', () => {
     const time = new Time();
     time.pause(0);
     time.resume(5000);

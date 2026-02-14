@@ -29,6 +29,7 @@ import {
 const GLB_MAGIC = 0x46546C67; // "glTF"
 const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
+const UTF8_DECODER = new TextDecoder();
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -76,7 +77,7 @@ export function parseContainer(buffer: ArrayBuffer): {
   }
 
   // Treat the whole buffer as UTF-8 JSON
-  const text = new TextDecoder().decode(buffer);
+  const text = UTF8_DECODER.decode(buffer);
   const json = JSON.parse(text) as GltfAsset;
   return { json, binChunk: undefined };
 }
@@ -101,11 +102,14 @@ function parseGlb(buffer: ArrayBuffer): {
 
   while (offset < buffer.byteLength) {
     const chunkLength = view.getUint32(offset, true);
+    if (chunkLength === 0) {
+      throw new Error(`Invalid chunk length: ${chunkLength}`);
+    }
     const chunkType = view.getUint32(offset + 4, true);
     const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLength);
 
     if (chunkType === GLB_CHUNK_JSON) {
-      const text = new TextDecoder().decode(chunkData);
+      const text = UTF8_DECODER.decode(chunkData);
       json = JSON.parse(text) as GltfAsset;
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;
@@ -148,7 +152,7 @@ async function resolveBuffers(
       }
       resolved.push(binChunk);
     } else if (buf.uri.startsWith('data:')) {
-      resolved.push(decodeDataUri(buf.uri));
+      resolved.push(await decodeDataUri(buf.uri));
     } else {
       if (!resolveUri) {
         throw new Error(
@@ -165,18 +169,16 @@ async function resolveBuffers(
 /**
  * Decode a base64 data URI into an ArrayBuffer.
  */
-function decodeDataUri(uri: string): ArrayBuffer {
+async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   const commaIndex = uri.indexOf(',');
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
-  const base64 = uri.slice(commaIndex + 1);
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Failed to decode data URI (status ${response.status}).`);
   }
-  return bytes.buffer as ArrayBuffer;
+  return await response.arrayBuffer();
 }
 
 // ---------------------------------------------------------------------------
@@ -192,11 +194,12 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
   for (const mesh of json.meshes ?? []) {
     for (let pi = 0; pi < mesh.primitives.length; pi++) {
       const prim = mesh.primitives[pi];
+      const positionAccessorIndex = prim.attributes['POSITION'];
 
       const positions = readAccessorFloat(
         json,
         buffers,
-        prim.attributes['POSITION'],
+        positionAccessorIndex,
       );
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
@@ -211,8 +214,13 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const name = mesh.name
         ? (mesh.primitives.length > 1 ? `${mesh.name}_${pi}` : mesh.name)
         : `mesh_${result.length}`;
+      const positionAccessor = positionAccessorIndex !== undefined
+        ? getAccessor(json, positionAccessorIndex)
+        : undefined;
+      const min = positionAccessor?.min ?? [];
+      const max = positionAccessor?.max ?? [];
 
-      result.push({ name, positions, normals, uvs, indices });
+      result.push({ name, positions, normals, uvs, indices, min, max });
     }
   }
 
@@ -235,11 +243,12 @@ export function readAccessorFloat(
   if (accessorIndex === undefined) return new Float32Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
-  const { data, byteOffset, byteStride } = getBufferSlice(json, buffers, accessor);
+  const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
   const componentCount = accessor.count * componentCountForType(accessor.type);
+  const { elementSize, componentOffsets } = getAccessorElementLayout(accessor.componentType, accessor.type);
 
   // Fast path: tightly packed floats – just wrap
-  const expectedStride = componentSizeBytes(accessor.componentType, accessor.type);
+  const expectedStride = elementSize;
   const isTightlyPacked = byteStride === 0 || byteStride === expectedStride;
   if (accessor.componentType === GL_FLOAT && isTightlyPacked) {
     return new Float32Array(data, byteOffset, componentCount);
@@ -247,7 +256,11 @@ export function readAccessorFloat(
 
   // Slow path: stride or type conversion
   const elemSize = componentCountForType(accessor.type);
-  const stride = byteStride || elemSize * bytesPerComponent(accessor.componentType);
+  const stride = byteStride || expectedStride;
+  const requiredBytes = accessor.count === 0 ? 0 : (accessor.count - 1) * stride + elementSize;
+  if (requiredBytes > byteLength) {
+    throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
+  }
   const out = new Float32Array(componentCount);
   const view = new DataView(data);
   let outIdx = 0;
@@ -255,7 +268,7 @@ export function readAccessorFloat(
   for (let i = 0; i < accessor.count; i++) {
     const base = byteOffset + i * stride;
     for (let c = 0; c < elemSize; c++) {
-      out[outIdx++] = readComponent(view, base + c * bytesPerComponent(accessor.componentType), accessor.componentType);
+      out[outIdx++] = readComponent(view, base + componentOffsets[c], accessor.componentType);
     }
   }
 
@@ -274,11 +287,15 @@ export function readAccessorUint16(
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
-  const { data, byteOffset, byteStride } = getBufferSlice(json, buffers, accessor);
+  const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
 
   const count = accessor.count;
   const bpc = bytesPerComponent(accessor.componentType);
   const stride = byteStride || bpc;
+  const requiredBytes = count === 0 ? 0 : (count - 1) * stride + bpc;
+  if (requiredBytes > byteLength) {
+    throw new Error(`Index accessor ${accessorIndex} exceeds available buffer bounds.`);
+  }
 
   // Fast path: tightly packed unsigned shorts
   if (accessor.componentType === GL_UNSIGNED_SHORT && stride === 2) {
@@ -316,7 +333,7 @@ function getBufferSlice(
   json: GltfAsset,
   buffers: ArrayBuffer[],
   accessor: GltfAccessor,
-): { data: ArrayBuffer; byteOffset: number; byteStride: number } {
+): { data: ArrayBuffer; byteOffset: number; byteStride: number; byteLength: number } {
   const bvIndex = accessor.bufferView;
   if (bvIndex === undefined) {
     throw new Error('Accessors without a bufferView are not supported.');
@@ -327,10 +344,12 @@ function getBufferSlice(
   const data = buffers[bv.buffer];
   if (!data) throw new Error(`Buffer ${bv.buffer} not resolved.`);
 
-  const byteOffset = (bv.byteOffset ?? 0) + (accessor.byteOffset ?? 0);
+  const accessorByteOffset = accessor.byteOffset ?? 0;
+  const byteOffset = (bv.byteOffset ?? 0) + accessorByteOffset;
   const byteStride = bv.byteStride ?? 0;
+  const byteLength = bv.byteLength - accessorByteOffset;
 
-  return { data, byteOffset, byteStride };
+  return { data, byteOffset, byteStride, byteLength };
 }
 
 function readComponent(view: DataView, offset: number, componentType: number): number {
@@ -370,6 +389,22 @@ function componentCountForType(type: string): number {
   }
 }
 
-function componentSizeBytes(componentType: number, type: string): number {
-  return bytesPerComponent(componentType) * componentCountForType(type);
+function getAccessorElementLayout(componentType: number, type: string): { elementSize: number; componentOffsets: number[] } {
+  const bpc = bytesPerComponent(componentType);
+  if (type === 'MAT2' || type === 'MAT3' || type === 'MAT4') {
+    const rows = type === 'MAT2' ? 2 : type === 'MAT3' ? 3 : 4;
+    const cols = rows;
+    const columnStride = Math.ceil((rows * bpc) / 4) * 4;
+    const componentOffsets: number[] = [];
+    for (let col = 0; col < cols; col++) {
+      for (let row = 0; row < rows; row++) {
+        componentOffsets.push(col * columnStride + row * bpc);
+      }
+    }
+    return { elementSize: cols * columnStride, componentOffsets };
+  }
+
+  const componentCount = componentCountForType(type);
+  const componentOffsets = Array.from({ length: componentCount }, (_, idx) => idx * bpc);
+  return { elementSize: componentCount * bpc, componentOffsets };
 }

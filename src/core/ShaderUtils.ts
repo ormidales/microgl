@@ -30,7 +30,13 @@ export function createShader(
     const log = gl.getShaderInfoLog(shader) ?? 'unknown error';
     gl.deleteShader(shader);
     const label = type === gl.VERTEX_SHADER ? 'vertex' : 'fragment';
-    throw new Error(`Failed to compile ${label} shader:\n${log}`);
+    const sourceWithLineNumbers = source
+      .split('\n')
+      .map((line, index) => `${index + 1}: ${line}`)
+      .join('\n');
+    throw new Error(
+      `Failed to compile ${label} shader:\n${log}\nSource (${label} shader):\n${sourceWithLineNumbers}`,
+    );
   }
 
   return shader;

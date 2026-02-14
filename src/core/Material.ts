@@ -7,6 +7,7 @@
  */
 
 import { createShader, createProgram } from './ShaderUtils';
+import type { mat4 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // Default shaders
@@ -43,10 +44,12 @@ void main() {
 // ---------------------------------------------------------------------------
 
 export class Material {
-  public readonly program: WebGLProgram;
+  public program: WebGLProgram;
 
-  private readonly gl: WebGL2RenderingContext;
+  private gl: WebGL2RenderingContext;
   private readonly uniformLocations: Map<string, WebGLUniformLocation> = new Map();
+  private readonly vertexSource: string;
+  private readonly fragmentSource: string;
 
   /**
    * Create a Material by compiling and linking the supplied shaders.
@@ -61,10 +64,9 @@ export class Material {
     fragmentSource: string = DEFAULT_FRAGMENT_SOURCE,
   ) {
     this.gl = gl;
-
-    const vs = createShader(gl, gl.VERTEX_SHADER, vertexSource);
-    const fs = createShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-    this.program = createProgram(gl, vs, fs);
+    this.vertexSource = vertexSource;
+    this.fragmentSource = fragmentSource;
+    this.program = this.createProgram();
   }
 
   // ---------------------------------------------------------------------------
@@ -106,7 +108,7 @@ export class Material {
   }
 
   /** Set a `mat4` uniform from a `Float32Array` (column-major). */
-  setMat4(name: string, value: Float32Array): void {
+  setMat4(name: string, value: Float32Array | mat4): void {
     this.gl.uniformMatrix4fv(this.location(name), false, value);
   }
 
@@ -117,6 +119,13 @@ export class Material {
   /** Delete the program from the GPU. */
   dispose(): void {
     this.gl.deleteProgram(this.program);
+  }
+
+  /** Rebuild the GPU program (typically after `webglcontextrestored`) and reset cached uniforms. */
+  restore(gl: WebGL2RenderingContext = this.gl): void {
+    this.gl = gl;
+    this.uniformLocations.clear();
+    this.program = this.createProgram();
   }
 
   // ---------------------------------------------------------------------------
@@ -136,5 +145,11 @@ export class Material {
       this.uniformLocations.set(name, loc);
     }
     return loc;
+  }
+
+  private createProgram(): WebGLProgram {
+    const vs = createShader(this.gl, this.gl.VERTEX_SHADER, this.vertexSource);
+    const fs = createShader(this.gl, this.gl.FRAGMENT_SHADER, this.fragmentSource);
+    return createProgram(this.gl, vs, fs);
   }
 }

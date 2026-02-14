@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   loadGltf,
   parseContainer,
@@ -165,6 +165,18 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).toThrow(/Unsupported GLB version/);
   });
 
+  it('throws when GLB chunk length is zero', () => {
+    const glb = new ArrayBuffer(20);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true); // magic
+    view.setUint32(4, 2, true);          // version 2
+    view.setUint32(8, 20, true);
+    view.setUint32(12, 0, true);         // chunk length
+    view.setUint32(16, 0x4E4F534A, true); // JSON
+
+    expect(() => parseContainer(glb)).toThrow(/Invalid chunk length/);
+  });
+
   it('throws when GLB has no JSON chunk', () => {
     // Build a GLB header with no chunks following
     const glb = new ArrayBuffer(12);
@@ -174,6 +186,40 @@ describe('parseContainer', () => {
     view.setUint32(8, 12, true);
 
     expect(() => parseContainer(glb)).toThrow(/does not contain a JSON chunk/);
+  });
+
+  it('reuses a single TextDecoder instance across multiple parses', async () => {
+    const OriginalTextDecoder = globalThis.TextDecoder;
+    let decoderInstanceCount = 0;
+
+    class CountingTextDecoder {
+      constructor() {
+        decoderInstanceCount++;
+      }
+
+      decode(input?: ArrayBuffer | ArrayBufferView): string {
+        return new OriginalTextDecoder().decode(input);
+      }
+    }
+
+    vi.stubGlobal('TextDecoder', CountingTextDecoder as unknown as typeof TextDecoder);
+    vi.resetModules();
+
+    try {
+      const { parseContainer: parseContainerWithStub } = await import('../src/core/GltfLoader');
+      const asset = minimalGltf();
+      const jsonBuffer = jsonToBuffer(asset);
+      const glbBuffer = buildGlb(asset);
+
+      parseContainerWithStub(jsonBuffer);
+      parseContainerWithStub(glbBuffer);
+      parseContainerWithStub(jsonBuffer);
+
+      expect(decoderInstanceCount).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });
 
@@ -204,6 +250,40 @@ describe('readAccessorFloat', () => {
   it('throws for missing accessor', () => {
     const json = minimalGltf({ accessors: [] });
     expect(() => readAccessorFloat(json, [], 99)).toThrow(/Accessor 99 not found/);
+  });
+
+  it('reads MAT3 accessors with column padding required by glTF alignment', () => {
+    const bin = new Uint8Array([
+      1, 2, 3, 0,
+      4, 5, 6, 0,
+      7, 8, 9, 0,
+    ]).buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_BYTE, count: 1, type: 'MAT3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    const matrix = readAccessorFloat(json, [bin], 0);
+    expect(Array.from(matrix)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('throws when float accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(32);
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 16, byteStride: 16 }],
+      buffers: [{ byteLength: 32 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
 });
 
@@ -245,6 +325,20 @@ describe('readAccessorUint16', () => {
     const result = readAccessorUint16(json, [], undefined);
     expect(result.length).toBe(0);
   });
+
+  it('throws when index accessor count exceeds buffer bounds', () => {
+    const bin = new Uint16Array([0, 1, 2]).buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_SHORT, count: 4, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      buffers: [{ byteLength: 6 }],
+    };
+
+    expect(() => readAccessorUint16(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -268,6 +362,28 @@ describe('loadGltf', () => {
     expect(result.meshes[0].name).toBe('Triangle');
     expect(result.meshes[0].positions.length).toBe(9);
     expect(result.meshes[0].indices.length).toBe(3);
+  });
+
+  it('decodes data URI buffers via async fetch', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:application/octet-stream;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: vi.fn().mockResolvedValue(bin),
+    } as Response);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('loads a GLB file with embedded binary chunk', async () => {
@@ -440,6 +556,19 @@ describe('loadGltf', () => {
     expect(result.meshes[0].indices.length).toBe(0);
     expect(result.meshes[0].positions.length).toBe(9);
   });
+
+  it('propagates POSITION accessor min/max bounds', async () => {
+    const { json, bin } = triangleAsset();
+    json.accessors![0].min = [0, 0, 0];
+    json.accessors![0].max = [1, 1, 0];
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].min).toEqual([0, 0, 0]);
+    expect(result.meshes[0].max).toEqual([1, 1, 0]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -451,6 +580,8 @@ describe('MeshComponent with normals and uvs', () => {
     const m = new MeshComponent();
     expect(m.normals.length).toBe(0);
     expect(m.uvs.length).toBe(0);
+    expect(m.min).toEqual([]);
+    expect(m.max).toEqual([]);
   });
 
   it('accepts normals and uvs in constructor', () => {
@@ -459,8 +590,12 @@ describe('MeshComponent with normals and uvs', () => {
       new Uint16Array([0]),
       new Float32Array([0, 0, 1]),
       new Float32Array([0.5, 0.5]),
+      [0, 0, 0],
+      [1, 1, 1],
     );
     expect(m.normals.length).toBe(3);
     expect(m.uvs.length).toBe(2);
+    expect(m.min).toEqual([0, 0, 0]);
+    expect(m.max).toEqual([1, 1, 1]);
   });
 });

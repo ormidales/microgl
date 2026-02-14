@@ -39,11 +39,17 @@ export class OrbitalCameraSystem extends System {
   private deltaTheta = 0;
   private deltaPhi = 0;
   private deltaZoom = 0;
+  private readonly eye = vec3.create();
+  private readonly center = vec3.create();
+  private readonly up = vec3.set(vec3.create(), 0, 1, 0);
 
   // Bound handlers (kept for removal in `detach`)
   private readonly onMouseDown = this.handleMouseDown.bind(this);
   private readonly onMouseMove = this.handleMouseMove.bind(this);
   private readonly onMouseUp = this.handleMouseUp.bind(this);
+  private readonly onTouchStart = this.handleTouchStart.bind(this);
+  private readonly onTouchMove = this.handleTouchMove.bind(this);
+  private readonly onTouchEnd = this.handleTouchEnd.bind(this);
   private readonly onWheel = this.handleWheel.bind(this);
 
   // ---------------------------------------------------------------------------
@@ -57,6 +63,9 @@ export class OrbitalCameraSystem extends System {
     canvas.addEventListener('mousedown', this.onMouseDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
     canvas.addEventListener('mouseup', this.onMouseUp);
+    canvas.addEventListener('touchstart', this.onTouchStart);
+    canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', this.onTouchEnd);
     canvas.addEventListener('wheel', this.onWheel, { passive: false });
   }
 
@@ -66,6 +75,9 @@ export class OrbitalCameraSystem extends System {
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.canvas = null;
   }
@@ -99,11 +111,9 @@ export class OrbitalCameraSystem extends System {
       const eyeY = cam.target[1] + cam.radius * Math.cos(cam.phi);
       const eyeZ = cam.target[2] + cam.radius * sinPhi * Math.cos(cam.theta);
 
-      const eye = vec3.fromValues(eyeX, eyeY, eyeZ);
-      const center = vec3.fromValues(...cam.target);
-      const up = vec3.fromValues(0, 1, 0);
-
-      mat4.lookAt(cam.view, eye, center, up);
+      vec3.set(this.eye, eyeX, eyeY, eyeZ);
+      vec3.set(this.center, cam.target[0], cam.target[1], cam.target[2]);
+      mat4.lookAt(cam.view, this.eye, this.center, this.up);
 
       // Rebuild projection (aspect may change on resize)
       const aspect = this.canvas
@@ -145,8 +155,31 @@ export class OrbitalCameraSystem extends System {
     this.dragging = false;
   }
 
+  private handleTouchStart(e: TouchEvent): void {
+    if (e.touches.length !== 1) return;
+    this.dragging = true;
+    this.lastX = e.touches[0].clientX;
+    this.lastY = e.touches[0].clientY;
+  }
+
+  private handleTouchMove(e: TouchEvent): void {
+    if (!this.dragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    const dx = e.touches[0].clientX - this.lastX;
+    const dy = e.touches[0].clientY - this.lastY;
+    this.lastX = e.touches[0].clientX;
+    this.lastY = e.touches[0].clientY;
+
+    this.deltaTheta -= dx * this.rotateSensitivity;
+    this.deltaPhi -= dy * this.rotateSensitivity;
+  }
+
+  private handleTouchEnd(_e: TouchEvent): void {
+    this.dragging = false;
+  }
+
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    this.deltaZoom += e.deltaY * this.zoomSensitivity;
+    this.deltaZoom += Math.sign(e.deltaY) * this.zoomSensitivity;
   }
 }

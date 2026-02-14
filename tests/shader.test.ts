@@ -90,6 +90,18 @@ describe('createShader', () => {
     );
   });
 
+  it('includes numbered shader source on compilation failure', () => {
+    const gl = createMockGL({
+      getShaderParameter: vi.fn(() => false),
+      getShaderInfoLog: vi.fn(() => 'syntax error'),
+    });
+    const source = 'void main() {\n  gl_Position = vec4(0.0);\n}';
+
+    expect(() => createShader(gl, gl.VERTEX_SHADER, source)).toThrow(
+      /Source \(vertex shader\):\n1: void main\(\) \{\n2:   gl_Position = vec4\(0.0\);\n3: \}/,
+    );
+  });
+
   it('throws if gl.createShader returns null', () => {
     const gl = createMockGL({ createShader: vi.fn(() => null) });
 
@@ -205,6 +217,37 @@ describe('ShaderCache', () => {
     expect(gl.deleteProgram).toHaveBeenCalled();
     expect(gl.deleteShader).toHaveBeenCalled();
   });
+
+  it('removeProgram deletes only the targeted program resources', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    const programA = cache.getProgram('vert-a', 'frag-a', 'prog-a');
+    const programB = cache.getProgram('vert-b', 'frag-b', 'prog-b');
+
+    cache.removeProgram('prog-b');
+
+    expect(gl.deleteProgram).toHaveBeenCalledWith(programB);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+
+    expect(cache.getProgram('vert-a', 'frag-a', 'prog-a')).toBe(programA);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+    expect(cache.getProgram('vert-b', 'frag-b', 'prog-b')).not.toBe(programB);
+    expect(gl.createProgram).toHaveBeenCalledTimes(3);
+  });
+
+  it('removeProgram is a no-op for missing keys', () => {
+    cache.removeProgram('does-not-exist');
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+    expect(gl.deleteShader).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -287,6 +330,18 @@ describe('Material', () => {
     const mat = new Material(gl);
     mat.dispose();
     expect(gl.deleteProgram).toHaveBeenCalledWith(mat.program);
+  });
+
+  it('restore rebuilds program and clears uniform cache', () => {
+    const mat = new Material(gl);
+    mat.setFloat('u_time', 1.0);
+    mat.restore();
+    mat.setFloat('u_time', 2.0);
+
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+    const calls = (gl.getUniformLocation as ReturnType<typeof vi.fn>).mock.calls
+      .filter((c: unknown[]) => c[1] === 'u_time');
+    expect(calls.length).toBe(2);
   });
 });
 

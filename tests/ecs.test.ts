@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
 import { TransformComponent } from '../src/core/ecs/components/TransformComponent';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
 import { RenderSystem } from '../src/core/ecs/systems/RenderSystem';
 import { OrbitalCameraSystem } from '../src/core/ecs/systems/OrbitalCameraSystem';
+import { vec3 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // EntityManager
@@ -53,6 +54,15 @@ describe('EntityManager', () => {
     expect(em.getComponent(id, 'Transform')).toBeUndefined();
   });
 
+  it('prunes empty component store on removeComponent', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.removeComponent(id, 'Transform');
+
+    expect((em as any).stores.has('Transform')).toBe(false);
+  });
+
   it('getEntitiesWith filters by bitmask', () => {
     const em = new EntityManager();
     const a = em.createEntity();
@@ -85,6 +95,26 @@ describe('EntityManager', () => {
     const em = new EntityManager();
     expect(() => em.destroyEntity(42)).not.toThrow();
   });
+
+  it('prunes empty component stores on destroyEntity', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.destroyEntity(id);
+
+    expect((em as any).stores.has('Transform')).toBe(false);
+  });
+
+  it('supports more than 31 distinct component types', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    for (let i = 0; i < 32; i++) {
+      em.addComponent(id, { type: `Component${i}` });
+    }
+
+    expect(em.getEntitiesWith('Component0', 'Component31')).toEqual([id]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -113,6 +143,40 @@ describe('MeshComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('RenderSystem', () => {
+  function createMockGL(): WebGL2RenderingContext {
+    return {
+      ARRAY_BUFFER: 0x8892,
+      ELEMENT_ARRAY_BUFFER: 0x8893,
+      STATIC_DRAW: 0x88E4,
+      FLOAT: 0x1406,
+      TRIANGLES: 0x0004,
+      UNSIGNED_SHORT: 0x1403,
+      createVertexArray: vi.fn(() => ({} as WebGLVertexArrayObject)),
+      createBuffer: vi.fn(() => ({} as WebGLBuffer)),
+      bindVertexArray: vi.fn(),
+      bindBuffer: vi.fn(),
+      bufferData: vi.fn(),
+      enableVertexAttribArray: vi.fn(),
+      vertexAttribPointer: vi.fn(),
+      drawArrays: vi.fn(),
+      drawElements: vi.fn(),
+      deleteBuffer: vi.fn(),
+      deleteVertexArray: vi.fn(),
+    } as unknown as WebGL2RenderingContext;
+  }
+
+  function createMockMaterial() {
+    return { use: vi.fn(), setVec4: vi.fn(), setMat4: vi.fn() };
+  }
+
+  function createRenderSystemWithMocks() {
+    const gl = createMockGL();
+    const material = createMockMaterial();
+    const renderer = { gl };
+    const sys = new RenderSystem(renderer as any, material as any);
+    return { gl, material, sys };
+  }
+
   it('declares required components', () => {
     const sys = new RenderSystem();
     expect(sys.requiredComponents).toEqual(['Transform', 'Mesh']);
@@ -126,6 +190,45 @@ describe('RenderSystem', () => {
 
     const sys = new RenderSystem();
     expect(() => sys.update(em, 0.016)).not.toThrow();
+  });
+
+  it('issues drawArrays for non-indexed meshes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+
+    const { gl, material, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(material.use).toHaveBeenCalled();
+    expect(material.setMat4).toHaveBeenCalledWith('u_model', expect.any(Float32Array));
+    expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
+  });
+
+  it('issues drawElements for indexed meshes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.drawElements).toHaveBeenCalledWith(
+      gl.TRIANGLES,
+      3,
+      gl.UNSIGNED_SHORT,
+      0,
+    );
   });
 });
 
@@ -222,5 +325,101 @@ describe('OrbitalCameraSystem', () => {
     const em = new EntityManager();
     const sys = new OrbitalCameraSystem();
     expect(() => sys.update(em, 0.016)).not.toThrow();
+  });
+
+  it('update does not allocate vec3 with fromValues each frame', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const spy = vi.spyOn(vec3, 'fromValues');
+    const sys = new OrbitalCameraSystem();
+    sys.update(em, 0.016);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('applies touch drag input to orbital angles', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    cam.phi = 2;
+    em.addComponent(id, cam);
+
+    const listeners = new Map<string, EventListener>();
+    const canvas = {
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        listeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn((type: string) => {
+        listeners.delete(type);
+      }),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const start = listeners.get('touchstart');
+    const move = listeners.get('touchmove');
+    const end = listeners.get('touchend');
+    expect(start).toBeDefined();
+    expect(move).toBeDefined();
+    expect(end).toBeDefined();
+
+    start?.({
+      touches: [{ clientX: 10, clientY: 20 }],
+    } as unknown as Event);
+    const preventDefault = vi.fn();
+    move?.({
+      touches: [{ clientX: 12, clientY: 23 }],
+      preventDefault,
+    } as unknown as Event);
+    end?.({} as Event);
+
+    sys.update(em, 0.016);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(cam.theta).toBeCloseTo(-0.2);
+    expect(cam.phi).toBeCloseTo(1.7);
+  });
+
+  it('normalizes wheel zoom to direction only', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const listeners = new Map<string, EventListener>();
+    const canvas = {
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        listeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn((type: string) => {
+        listeners.delete(type);
+      }),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    const wheel = listeners.get('wheel');
+    expect(wheel).toBeDefined();
+    const startRadius = cam.radius;
+
+    const preventDefault = vi.fn();
+    wheel?.({ deltaY: 120, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterLargeStep = cam.radius;
+
+    wheel?.({ deltaY: 1, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterSmallStep = cam.radius;
+
+    expect(preventDefault).toHaveBeenCalledTimes(2);
+    expect(radiusAfterLargeStep).toBeCloseTo(startRadius + 0.01);
+    expect(radiusAfterSmallStep).toBeCloseTo(startRadius + 0.02);
   });
 });

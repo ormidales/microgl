@@ -7,19 +7,15 @@ import type { EntityId, Component } from './types';
  * in `Map<EntityId, Component>` collections, enabling fast iteration by
  * component type.
  *
- * A bitmask signature is maintained for each entity so that systems can
+ * A signature set is maintained for each entity so that systems can
  * quickly determine whether an entity owns a required set of components.
  */
 export class EntityManager {
   private nextId: EntityId = 0;
   private readonly entities: Set<EntityId> = new Set();
 
-  /** component-type → bit index */
-  private readonly componentBits: Map<string, number> = new Map();
-  private nextBit: number = 0;
-
-  /** entity → bitmask of attached component types */
-  private readonly signatures: Map<EntityId, number> = new Map();
+  /** entity → set of attached component types */
+  private readonly signatures: Map<EntityId, Set<string>> = new Map();
 
   /** component-type → (entity → component) */
   private readonly stores: Map<string, Map<EntityId, Component>> = new Map();
@@ -32,7 +28,7 @@ export class EntityManager {
   createEntity(): EntityId {
     const id = this.nextId++;
     this.entities.add(id);
-    this.signatures.set(id, 0);
+    this.signatures.set(id, new Set());
     return id;
   }
 
@@ -69,9 +65,7 @@ export class EntityManager {
     }
     store.set(id, component);
 
-    // Update bitmask
-    const bit = this.getBit(cType);
-    this.signatures.set(id, (this.signatures.get(id) ?? 0) | bit);
+    this.signatures.get(id)?.add(cType);
   }
 
   /** Remove a component type from an entity. */
@@ -81,11 +75,7 @@ export class EntityManager {
       store.delete(id);
     }
 
-    const bit = this.getBit(componentType);
-    const sig = this.signatures.get(id);
-    if (sig !== undefined) {
-      this.signatures.set(id, sig & ~bit);
-    }
+    this.signatures.get(id)?.delete(componentType);
   }
 
   /** Get a component instance for an entity, or `undefined`. */
@@ -104,35 +94,14 @@ export class EntityManager {
 
   /**
    * Return all entity ids that possess **every** component type listed.
-   * Uses bitmask comparison for fast filtering.
    */
   getEntitiesWith(...componentTypes: string[]): EntityId[] {
-    const mask = componentTypes.reduce((m, t) => m | this.getBit(t), 0);
     const result: EntityId[] = [];
     for (const [id, sig] of this.signatures) {
-      if ((sig & mask) === mask) {
+      if (componentTypes.every((type) => sig.has(type))) {
         result.push(id);
       }
     }
     return result;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------------
-
-  /** Return (and lazily assign) the bit index for a component type. */
-  private getBit(componentType: string): number {
-    let bit = this.componentBits.get(componentType);
-    if (bit === undefined) {
-      if (this.nextBit >= 31) {
-        throw new Error(
-          `EntityManager: exceeded maximum of 31 distinct component types.`,
-        );
-      }
-      bit = 1 << this.nextBit++;
-      this.componentBits.set(componentType, bit);
-    }
-    return bit;
   }
 }

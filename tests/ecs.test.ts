@@ -384,4 +384,42 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.theta).toBeCloseTo(-0.2);
     expect(cam.phi).toBeCloseTo(1.7);
   });
+
+  it('normalizes wheel zoom to direction only', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const listeners = new Map<string, EventListener>();
+    const canvas = {
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        listeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn((type: string) => {
+        listeners.delete(type);
+      }),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    const wheel = listeners.get('wheel');
+    expect(wheel).toBeDefined();
+    const startRadius = cam.radius;
+
+    const preventDefault = vi.fn();
+    wheel?.({ deltaY: 120, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterLargeStep = cam.radius;
+
+    wheel?.({ deltaY: 1, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterSmallStep = cam.radius;
+
+    expect(preventDefault).toHaveBeenCalledTimes(2);
+    expect(radiusAfterLargeStep).toBeCloseTo(startRadius + 0.01);
+    expect(radiusAfterSmallStep).toBeCloseTo(startRadius + 0.02);
+  });
 });

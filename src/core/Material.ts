@@ -7,6 +7,7 @@
  */
 
 import { createShader, createProgram } from './ShaderUtils';
+import type { mat4 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // Default shaders
@@ -106,7 +107,7 @@ export class Material {
   }
 
   /** Set a `mat4` uniform from a `Float32Array` (column-major). */
-  setMat4(name: string, value: Float32Array): void {
+  setMat4(name: string, value: Float32Array | mat4): void {
     this.gl.uniformMatrix4fv(this.location(name), false, value);
   }
 

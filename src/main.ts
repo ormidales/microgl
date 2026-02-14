@@ -1,5 +1,6 @@
 import { Renderer } from './core/Renderer';
 import { Time } from './core/Time';
+import { Material } from './core/Material';
 import {
   EntityManager,
   TransformComponent,
@@ -11,10 +12,11 @@ import {
 
 const renderer = new Renderer();
 const time = new Time();
+const material = new Material(renderer.gl);
 
 // --- ECS setup ---
 const em = new EntityManager();
-const renderSystem = new RenderSystem();
+const renderSystem = new RenderSystem(renderer, material);
 const cameraSystem = new OrbitalCameraSystem();
 cameraSystem.attach(renderer.canvas);
 

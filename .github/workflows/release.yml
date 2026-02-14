@@ -1,8 +1,6 @@
 name: Release quotidienne
 
 on:
-  schedule:
-    - cron: '30 23 * * *'
   workflow_dispatch:
 
 permissions:

@@ -11,6 +11,7 @@ export class Time {
   public elapsed: number = 0;
 
   private last: number = 0;
+  private pausedAt: number = 0;
 
   /** Call once at the start of each frame with the rAF timestamp (ms). */
   update(nowMs: number): void {
@@ -25,10 +26,28 @@ export class Time {
     this.last = nowMs;
   }
 
+  /** Pause elapsed time accumulation until resumed. */
+  pause(nowMs: number = performance.now()): void {
+    if (this.pausedAt === 0) {
+      this.pausedAt = nowMs;
+    }
+  }
+
+  /** Resume elapsed time accumulation after a pause. */
+  resume(nowMs: number = performance.now()): void {
+    if (this.pausedAt !== 0) {
+      if (this.last !== 0) {
+        this.last += nowMs - this.pausedAt;
+      }
+      this.pausedAt = 0;
+    }
+  }
+
   /** Reset all counters. */
   reset(): void {
     this.deltaTime = 0;
     this.elapsed = 0;
     this.last = 0;
+    this.pausedAt = 0;
   }
 }

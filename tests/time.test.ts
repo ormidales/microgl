@@ -21,4 +21,24 @@ describe('Time', () => {
 
     expect(time.deltaTime).toBe(0.1);
   });
+
+  it('does not include paused duration in delta time after resume', () => {
+    const time = new Time();
+    time.update(1000);
+    time.update(1016);
+    time.pause(1020);
+    time.resume(6020);
+    time.update(6036);
+
+    expect(time.deltaTime).toBe(0.02);
+  });
+
+  it('keeps deltaTime at zero for first update after pausing before any updates', () => {
+    const time = new Time();
+    time.pause(0);
+    time.resume(5000);
+    time.update(5016);
+
+    expect(time.deltaTime).toBe(0);
+  });
 });

@@ -101,7 +101,7 @@ function parseGlb(buffer: ArrayBuffer): {
 
   while (offset < buffer.byteLength) {
     const chunkLength = view.getUint32(offset, true);
-    if (chunkLength <= 0) {
+    if (chunkLength === 0) {
       throw new Error(`Invalid chunk length: ${chunkLength}`);
     }
     const chunkType = view.getUint32(offset + 4, true);

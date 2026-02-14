@@ -59,6 +59,30 @@ describe('Renderer', () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(onLost).toHaveBeenCalledTimes(1);
+    expect(canvas.getContext).toHaveBeenCalledWith('webgl2', undefined);
+  });
+
+  it('passes custom context attributes on creation and restore', () => {
+    const gl1 = createMockGL();
+    const gl2 = createMockGL();
+    const canvas = new MockCanvas([gl1, gl2]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const contextAttributes: WebGLContextAttributes = {
+      alpha: false,
+      depth: false,
+      antialias: false,
+      preserveDrawingBuffer: true,
+    };
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container, contextAttributes);
+    canvas.dispatchEvent(new Event('webglcontextrestored'));
+
+    expect(canvas.getContext).toHaveBeenNthCalledWith(1, 'webgl2', contextAttributes);
+    expect(canvas.getContext).toHaveBeenNthCalledWith(2, 'webgl2', contextAttributes);
   });
 
   it('reacquires context on restore and notifies listeners with new context', () => {

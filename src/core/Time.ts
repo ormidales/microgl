@@ -2,6 +2,8 @@
  * Tracks elapsed time and per-frame delta time.
  */
 export class Time {
+  private static readonly MAX_DELTA_TIME_SECONDS = 0.1;
+
   /** Seconds elapsed since the last frame. */
   public deltaTime: number = 0;
 
@@ -15,7 +17,10 @@ export class Time {
     if (this.last === 0) {
       this.last = nowMs;
     }
-    this.deltaTime = (nowMs - this.last) / 1000;
+    this.deltaTime = Math.min(
+      (nowMs - this.last) / 1000,
+      Time.MAX_DELTA_TIME_SECONDS,
+    );
     this.elapsed += this.deltaTime;
     this.last = nowMs;
   }

@@ -90,6 +90,18 @@ describe('createShader', () => {
     );
   });
 
+  it('includes numbered shader source on compilation failure', () => {
+    const gl = createMockGL({
+      getShaderParameter: vi.fn(() => false),
+      getShaderInfoLog: vi.fn(() => 'syntax error'),
+    });
+    const source = 'void main() {\n  gl_Position = vec4(0.0);\n}';
+
+    expect(() => createShader(gl, gl.VERTEX_SHADER, source)).toThrow(
+      /Source \(vertex shader\):\n1: void main\(\) \{\n2:   gl_Position = vec4\(0.0\);\n3: \}/,
+    );
+  });
+
   it('throws if gl.createShader returns null', () => {
     const gl = createMockGL({ createShader: vi.fn(() => null) });
 

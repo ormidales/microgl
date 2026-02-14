@@ -28,13 +28,25 @@ class MockCanvas extends EventTarget {
 }
 
 class MockResizeObserver {
+  public static instances: MockResizeObserver[] = [];
   public readonly observe = vi.fn();
   public readonly disconnect = vi.fn();
+  private readonly callback: ResizeObserverCallback;
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+
+  public trigger(entries: ResizeObserverEntry[]): void {
+    this.callback(entries, this as unknown as ResizeObserver);
+  }
 }
 
 describe('Renderer', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    MockResizeObserver.instances = [];
   });
 
   afterEach(() => {
@@ -133,5 +145,25 @@ describe('Renderer', () => {
     new Renderer(container);
 
     expect(gl.viewport).not.toHaveBeenCalled();
+  });
+
+  it('uses dynamic device pixel ratio from resize observer entry', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+
+    MockResizeObserver.instances[0].trigger([
+      { devicePixelContentBoxSize: [{ inlineSize: 400, blockSize: 200 }] } as unknown as ResizeObserverEntry,
+    ]);
+
+    expect(canvas.width).toBe(400);
+    expect(canvas.height).toBe(200);
+    expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
   });
 });

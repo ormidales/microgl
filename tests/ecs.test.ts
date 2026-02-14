@@ -85,6 +85,17 @@ describe('EntityManager', () => {
     const em = new EntityManager();
     expect(() => em.destroyEntity(42)).not.toThrow();
   });
+
+  it('supports more than 31 distinct component types', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    for (let i = 0; i < 32; i++) {
+      em.addComponent(id, { type: `Component${i}` });
+    }
+
+    expect(em.getEntitiesWith('Component0', 'Component31')).toEqual([id]);
+  });
 });
 
 // ---------------------------------------------------------------------------

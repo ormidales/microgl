@@ -28,15 +28,19 @@ export class Renderer {
 
     this.resizeViewport();
 
-    this.resizeObserver = new ResizeObserver(() => this.resizeViewport());
+    this.resizeObserver = new ResizeObserver((entries) => this.resizeViewport(entries[0]));
     this.resizeObserver.observe(this.canvas);
   }
 
   /** Synchronize the drawing buffer size with the canvas CSS size. */
-  private resizeViewport(): void {
-    const dpr = window.devicePixelRatio ?? 1;
-    const width = Math.round(this.canvas.clientWidth * dpr);
-    const height = Math.round(this.canvas.clientHeight * dpr);
+  private resizeViewport(entry?: ResizeObserverEntry): void {
+    const devicePixelContentBoxSize = entry?.devicePixelContentBoxSize?.[0];
+    const width = Math.round(
+      devicePixelContentBoxSize?.inlineSize ?? this.canvas.clientWidth * (window.devicePixelRatio ?? 1)
+    );
+    const height = Math.round(
+      devicePixelContentBoxSize?.blockSize ?? this.canvas.clientHeight * (window.devicePixelRatio ?? 1)
+    );
     if (width === 0 || height === 0) return;
 
     if (this.canvas.width !== width || this.canvas.height !== height) {

@@ -32,4 +32,13 @@ describe('Time', () => {
 
     expect(time.deltaTime).toBe(0.02);
   });
+
+  it('keeps first update at zero after pause/resume before start', () => {
+    const time = new Time();
+    time.pause(0);
+    time.resume(5000);
+    time.update(5016);
+
+    expect(time.deltaTime).toBe(0);
+  });
 });

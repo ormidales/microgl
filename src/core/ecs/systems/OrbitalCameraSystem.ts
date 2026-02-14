@@ -39,6 +39,9 @@ export class OrbitalCameraSystem extends System {
   private deltaTheta = 0;
   private deltaPhi = 0;
   private deltaZoom = 0;
+  private readonly eye = vec3.create();
+  private readonly center = vec3.create();
+  private readonly up = vec3.set(vec3.create(), 0, 1, 0);
 
   // Bound handlers (kept for removal in `detach`)
   private readonly onMouseDown = this.handleMouseDown.bind(this);
@@ -99,11 +102,9 @@ export class OrbitalCameraSystem extends System {
       const eyeY = cam.target[1] + cam.radius * Math.cos(cam.phi);
       const eyeZ = cam.target[2] + cam.radius * sinPhi * Math.cos(cam.theta);
 
-      const eye = vec3.fromValues(eyeX, eyeY, eyeZ);
-      const center = vec3.fromValues(...cam.target);
-      const up = vec3.fromValues(0, 1, 0);
-
-      mat4.lookAt(cam.view, eye, center, up);
+      vec3.set(this.eye, eyeX, eyeY, eyeZ);
+      vec3.set(this.center, cam.target[0], cam.target[1], cam.target[2]);
+      mat4.lookAt(cam.view, this.eye, this.center, this.up);
 
       // Rebuild projection (aspect may change on resize)
       const aspect = this.canvas

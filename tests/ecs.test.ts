@@ -5,6 +5,7 @@ import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
 import { RenderSystem } from '../src/core/ecs/systems/RenderSystem';
 import { OrbitalCameraSystem } from '../src/core/ecs/systems/OrbitalCameraSystem';
+import { vec3 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // EntityManager
@@ -306,5 +307,17 @@ describe('OrbitalCameraSystem', () => {
     const em = new EntityManager();
     const sys = new OrbitalCameraSystem();
     expect(() => sys.update(em, 0.016)).not.toThrow();
+  });
+
+  it('update does not allocate vec3 with fromValues each frame', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const spy = vi.spyOn(vec3, 'fromValues');
+    const sys = new OrbitalCameraSystem();
+    sys.update(em, 0.016);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
   });
 });

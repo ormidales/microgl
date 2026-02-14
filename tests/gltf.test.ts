@@ -251,6 +251,40 @@ describe('readAccessorFloat', () => {
     const json = minimalGltf({ accessors: [] });
     expect(() => readAccessorFloat(json, [], 99)).toThrow(/Accessor 99 not found/);
   });
+
+  it('reads MAT3 accessors with column padding required by glTF alignment', () => {
+    const bin = new Uint8Array([
+      1, 2, 3, 0,
+      4, 5, 6, 0,
+      7, 8, 9, 0,
+    ]).buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_BYTE, count: 1, type: 'MAT3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    const matrix = readAccessorFloat(json, [bin], 0);
+    expect(Array.from(matrix)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('throws when float accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(32);
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 16, byteStride: 16 }],
+      buffers: [{ byteLength: 32 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
 });
 
 // ---------------------------------------------------------------------------

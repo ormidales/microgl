@@ -276,18 +276,19 @@ describe('loadGltf', () => {
     const uri = `data:application/octet-stream;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchMock = vi.fn().mockResolvedValue({
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
       arrayBuffer: vi.fn().mockResolvedValue(bin),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    } as Response);
 
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchMock).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
       expect(result.meshes).toHaveLength(1);
     } finally {
-      vi.unstubAllGlobals();
+      fetchSpy.mockRestore();
     }
   });
 

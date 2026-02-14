@@ -171,6 +171,9 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
     throw new Error('Invalid data URI: no comma separator found.');
   }
   const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Failed to decode data URI (status ${response.status}).`);
+  }
   return await response.arrayBuffer();
 }
 

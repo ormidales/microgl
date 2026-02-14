@@ -187,6 +187,40 @@ describe('parseContainer', () => {
 
     expect(() => parseContainer(glb)).toThrow(/does not contain a JSON chunk/);
   });
+
+  it('reuses a single TextDecoder instance across multiple parses', async () => {
+    const OriginalTextDecoder = globalThis.TextDecoder;
+    let decoderInstanceCount = 0;
+
+    class CountingTextDecoder {
+      constructor() {
+        decoderInstanceCount++;
+      }
+
+      decode(input?: ArrayBuffer | ArrayBufferView): string {
+        return new OriginalTextDecoder().decode(input);
+      }
+    }
+
+    vi.stubGlobal('TextDecoder', CountingTextDecoder as unknown as typeof TextDecoder);
+    vi.resetModules();
+
+    try {
+      const { parseContainer: parseContainerWithStub } = await import('../src/core/GltfLoader');
+      const asset = minimalGltf();
+      const jsonBuffer = jsonToBuffer(asset);
+      const glbBuffer = buildGlb(asset);
+
+      parseContainerWithStub(jsonBuffer);
+      parseContainerWithStub(glbBuffer);
+      parseContainerWithStub(jsonBuffer);
+
+      expect(decoderInstanceCount).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

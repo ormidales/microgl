@@ -95,10 +95,10 @@ describe('createShader', () => {
       getShaderParameter: vi.fn(() => false),
       getShaderInfoLog: vi.fn(() => 'syntax error'),
     });
-    const source = 'void main() {\n  gl_Position = vec4(0.0)\n}';
+    const source = 'void main() {\n  gl_Position = vec4(0.0);\n}';
 
     expect(() => createShader(gl, gl.VERTEX_SHADER, source)).toThrow(
-      /Source \(vertex shader\):\n1: void main\(\) \{\n2:   gl_Position = vec4\(0.0\)\n3: \}/,
+      /Source \(vertex shader\):\n1: void main\(\) \{\n2:   gl_Position = vec4\(0.0\);\n3: \}/,
     );
   });
 

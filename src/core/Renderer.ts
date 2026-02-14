@@ -6,17 +6,19 @@ export class Renderer {
   public gl: WebGL2RenderingContext;
 
   private resizeObserver: ResizeObserver;
+  private readonly contextAttributes?: WebGLContextAttributes;
   private readonly contextLostHandlers: Set<() => void> = new Set();
   private readonly contextRestoredHandlers: Set<(gl: WebGL2RenderingContext) => void> = new Set();
 
-  constructor(container: HTMLElement = document.body) {
+  constructor(container: HTMLElement = document.body, contextAttributes?: WebGLContextAttributes) {
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
     this.canvas.style.width = '100%';
     this.canvas.style.height = '100%';
     container.appendChild(this.canvas);
+    this.contextAttributes = contextAttributes;
 
-    const ctx = this.canvas.getContext('webgl2');
+    const ctx = this.canvas.getContext('webgl2', this.contextAttributes);
     if (!ctx) {
       throw new Error('WebGL 2 is not supported by this browser.');
     }
@@ -81,7 +83,7 @@ export class Renderer {
   };
 
   private readonly handleContextRestored = (): void => {
-    const ctx = this.canvas.getContext('webgl2');
+    const ctx = this.canvas.getContext('webgl2', this.contextAttributes);
     if (!ctx) {
       throw new Error('Failed to restore WebGL 2 context.');
     }

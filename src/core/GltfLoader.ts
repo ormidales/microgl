@@ -148,7 +148,7 @@ async function resolveBuffers(
       }
       resolved.push(binChunk);
     } else if (buf.uri.startsWith('data:')) {
-      resolved.push(decodeDataUri(buf.uri));
+      resolved.push(await decodeDataUri(buf.uri));
     } else {
       if (!resolveUri) {
         throw new Error(
@@ -165,18 +165,16 @@ async function resolveBuffers(
 /**
  * Decode a base64 data URI into an ArrayBuffer.
  */
-function decodeDataUri(uri: string): ArrayBuffer {
+async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   const commaIndex = uri.indexOf(',');
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
-  const base64 = uri.slice(commaIndex + 1);
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Failed to decode data URI (status ${response.status}).`);
   }
-  return bytes.buffer as ArrayBuffer;
+  return await response.arrayBuffer();
 }
 
 // ---------------------------------------------------------------------------

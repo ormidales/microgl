@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   loadGltf,
   parseContainer,
@@ -268,6 +268,28 @@ describe('loadGltf', () => {
     expect(result.meshes[0].name).toBe('Triangle');
     expect(result.meshes[0].positions.length).toBe(9);
     expect(result.meshes[0].indices.length).toBe(3);
+  });
+
+  it('decodes data URI buffers via async fetch', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:application/octet-stream;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: vi.fn().mockResolvedValue(bin),
+    } as Response);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('loads a GLB file with embedded binary chunk', async () => {

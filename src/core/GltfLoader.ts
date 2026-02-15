@@ -181,13 +181,20 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
+  let fetchFailure: Error | undefined;
   try {
     const response = await fetch(uri);
     if (response.ok) {
       return await response.arrayBuffer();
     }
-  } catch {
+    fetchFailure = new Error(`status ${response.status}`);
+  } catch (error) {
     // Fall back to manual decoding when fetch fails (e.g. oversized data URI).
+    fetchFailure = error instanceof Error ? error : new Error('network failure');
+  }
+  const header = uri.slice(0, commaIndex).toLowerCase();
+  if (!header.includes(';base64')) {
+    throw new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
   }
   const binary = atob(uri.slice(commaIndex + 1));
   const bytes = new Uint8Array(binary.length);

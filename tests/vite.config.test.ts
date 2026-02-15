@@ -22,5 +22,6 @@ describe('Vite config', () => {
     expect(input?.index.endsWith('index.html')).toBe(true);
     expect(input?.gallery.endsWith('gallery.html')).toBe(true);
     expect(input?.demos.endsWith('demos.html')).toBe(true);
+    expect(input?.demo.endsWith('demo.html')).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, expectTypeOf } from 'vitest';
 import { Time } from '../src/core/Time';
 
 // ---------------------------------------------------------------------------
@@ -40,5 +40,12 @@ describe('Time', () => {
     time.update(5016);
 
     expect(time.deltaTime).toBe(0);
+  });
+
+  it('requires explicit timestamps for pause and resume', () => {
+    const time = new Time();
+
+    expectTypeOf(time.pause).toEqualTypeOf<(nowMs: number) => void>();
+    expectTypeOf(time.resume).toEqualTypeOf<(nowMs: number) => void>();
   });
 });

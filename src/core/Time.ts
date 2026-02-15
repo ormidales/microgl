@@ -27,14 +27,14 @@ export class Time {
   }
 
   /** Pause elapsed time accumulation until resumed. */
-  pause(nowMs: number = performance.now()): void {
+  pause(nowMs: number): void {
     if (this.pausedAt === null) {
       this.pausedAt = nowMs;
     }
   }
 
   /** Resume elapsed time accumulation after a pause. */
-  resume(nowMs: number = performance.now()): void {
+  resume(nowMs: number): void {
     if (this.pausedAt !== null) {
       if (this.last !== 0) {
         this.last += Math.max(0, nowMs - this.pausedAt);

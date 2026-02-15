@@ -354,6 +354,40 @@ describe('Material', () => {
       .filter((c: unknown[]) => c[1] === 'u_time');
     expect(calls.length).toBe(2);
   });
+
+  it('restore can be called multiple times with a new context', () => {
+    const mat = new Material(gl);
+    let nextProgramId = 0;
+    const restoredGl = createMockGL({
+      createProgram: vi.fn(
+        () => ({ __restoredProgramId: nextProgramId++ }) as unknown as WebGLProgram,
+      ),
+    });
+
+    mat.restore(restoredGl);
+    const firstRestoredProgram = mat.program;
+    mat.restore(restoredGl);
+
+    expect(restoredGl.createProgram).toHaveBeenCalledTimes(2);
+    expect(mat.program).not.toBe(firstRestoredProgram);
+    mat.use();
+    expect(restoredGl.useProgram).toHaveBeenCalledWith(mat.program);
+  });
+
+  it('restore keeps previous context when restore fails', () => {
+    const mat = new Material(gl);
+    const initialProgram = mat.program;
+    const failingGl = createMockGL({
+      getProgramParameter: vi.fn(() => false),
+      getProgramInfoLog: vi.fn(() => 'link failed'),
+    });
+
+    expect(() => mat.restore(failingGl)).toThrow(/Failed to link shader program/);
+
+    mat.use();
+    expect(gl.useProgram).toHaveBeenCalledWith(initialProgram);
+    expect(failingGl.useProgram).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

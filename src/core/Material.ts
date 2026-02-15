@@ -123,9 +123,16 @@ export class Material {
 
   /** Rebuild the GPU program (typically after `webglcontextrestored`) and reset cached uniforms. */
   restore(gl: WebGL2RenderingContext = this.gl): void {
+    const previousGl = this.gl;
     this.gl = gl;
-    this.uniformLocations.clear();
-    this.program = this.createProgram();
+    try {
+      const restoredProgram = this.createProgram();
+      this.uniformLocations.clear();
+      this.program = restoredProgram;
+    } catch (error) {
+      this.gl = previousGl;
+      throw error;
+    }
   }
 
   // ---------------------------------------------------------------------------

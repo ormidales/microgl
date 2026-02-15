@@ -135,6 +135,11 @@ describe('parseContainer', () => {
     expect(binChunk).toBeUndefined();
   });
 
+  it('rejects oversized plain JSON glTF payloads before decode', () => {
+    const oversized = new ArrayBuffer((64 * 1024 * 1024) + 1);
+    expect(() => parseContainer(oversized)).toThrow(/payload too large/);
+  });
+
   it('parses GLB container with JSON + BIN chunks', () => {
     const { json: srcJson, bin } = triangleAsset();
     const glb = buildGlb(srcJson, bin);

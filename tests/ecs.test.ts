@@ -234,6 +234,30 @@ describe('RenderSystem', () => {
     );
   });
 
+  it('binds normal and uv attributes when provided', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array(0),
+        new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+        new Float32Array([0, 0, 1, 0, 0, 1]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.enableVertexAttribArray).toHaveBeenCalledWith(1);
+    expect(gl.enableVertexAttribArray).toHaveBeenCalledWith(2);
+    expect(gl.vertexAttribPointer).toHaveBeenCalledWith(1, 3, gl.FLOAT, false, 0, 0);
+    expect(gl.vertexAttribPointer).toHaveBeenCalledWith(2, 2, gl.FLOAT, false, 0, 0);
+  });
+
   it('releases GPU mesh buffers when Mesh component is removed', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -254,6 +278,30 @@ describe('RenderSystem', () => {
 
     expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases optional GPU buffers for normals and uvs', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+        new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+        new Float32Array([0, 0, 1, 0, 0, 1]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.removeComponent(id, 'Mesh');
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(4);
   });
 
   it('releases GPU mesh buffers when entity is destroyed', () => {

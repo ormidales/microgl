@@ -230,6 +230,44 @@ describe('RenderSystem', () => {
       0,
     );
   });
+
+  it('releases GPU mesh buffers when Mesh component is removed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.removeComponent(id, 'Mesh');
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases GPU mesh buffers when entity is destroyed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id);
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

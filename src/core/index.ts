@@ -15,3 +15,4 @@ export type {
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
+export * from './ecs';

@@ -1,0 +1,39 @@
+:root {
+  --color-bg: #09090f;
+  --color-surface: #14141f;
+  --color-accent: #64ffda;
+  --color-text: #e8ecff;
+  --font-sans: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.page-shell {
+  max-width: 48rem;
+  margin: 0 auto;
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  padding: 2rem;
+}

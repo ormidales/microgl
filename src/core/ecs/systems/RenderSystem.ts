@@ -13,6 +13,8 @@ import type { CameraComponent } from '../components/CameraComponent';
  */
 export class RenderSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
+  private consecutiveMeshBufferAllocationFailures = 0;
+  private warnedAboutMeshBufferAllocationFailure = false;
   private readonly identity = mat4.create();
   private readonly model = mat4.create();
   private readonly rotation = quat.create();
@@ -39,6 +41,20 @@ export class RenderSystem extends System {
     super();
   }
 
+  private markMeshBufferAllocationFailure(): null {
+    this.consecutiveMeshBufferAllocationFailures += 1;
+    if (
+      this.consecutiveMeshBufferAllocationFailures > 1
+      && !this.warnedAboutMeshBufferAllocationFailure
+    ) {
+      console.warn(
+        'RenderSystem: repeated GPU mesh buffer allocation failures detected. Rendering may be degraded until WebGL context recovers.',
+      );
+      this.warnedAboutMeshBufferAllocationFailure = true;
+    }
+    return null;
+  }
+
   private ensureMeshBuffers(
     gl: WebGL2RenderingContext,
     mesh: MeshComponent,
@@ -60,7 +76,7 @@ export class RenderSystem extends System {
     if (!vao || !vbo) {
       if (vao) gl.deleteVertexArray(vao);
       if (vbo) gl.deleteBuffer(vbo);
-      return null;
+      return this.markMeshBufferAllocationFailure();
     }
 
     gl.bindVertexArray(vao);
@@ -77,7 +93,7 @@ export class RenderSystem extends System {
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
         gl.deleteBuffer(vbo);
         gl.deleteVertexArray(vao);
-        return null;
+        return this.markMeshBufferAllocationFailure();
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, normalVbo);
       gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
@@ -94,7 +110,7 @@ export class RenderSystem extends System {
         if (normalVbo) gl.deleteBuffer(normalVbo);
         gl.deleteBuffer(vbo);
         gl.deleteVertexArray(vao);
-        return null;
+        return this.markMeshBufferAllocationFailure();
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, uvVbo);
       gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
@@ -112,7 +128,7 @@ export class RenderSystem extends System {
         if (normalVbo) gl.deleteBuffer(normalVbo);
         gl.deleteBuffer(vbo);
         gl.deleteVertexArray(vao);
-        return null;
+        return this.markMeshBufferAllocationFailure();
       }
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
@@ -132,6 +148,8 @@ export class RenderSystem extends System {
       indexCount: mesh.indices.length,
       indexType: mesh.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
     };
+    this.consecutiveMeshBufferAllocationFailures = 0;
+    this.warnedAboutMeshBufferAllocationFailure = false;
     this.meshBuffers.set(mesh, buffers);
     return buffers;
   }

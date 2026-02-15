@@ -408,6 +408,51 @@ describe('RenderSystem', () => {
     expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
+
+  it('warns once when mesh buffer allocation fails consecutively', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0])));
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(gl.createVertexArray).mockReturnValue(null);
+
+    sys.update(em, 0.016);
+    expect(warnSpy).not.toHaveBeenCalled();
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
+
+  it('resets consecutive allocation failures after a successful allocation', () => {
+    const em = new EntityManager();
+    const id1 = em.createEntity();
+    em.addComponent(id1, new TransformComponent());
+    em.addComponent(id1, new MeshComponent(new Float32Array([0, 0, 0])));
+    const id2 = em.createEntity();
+    em.addComponent(id2, new TransformComponent());
+    em.addComponent(id2, new MeshComponent(new Float32Array([0, 0, 0])));
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(gl.createVertexArray)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce({} as WebGLVertexArrayObject)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null);
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+    expect(warnSpy).not.toHaveBeenCalled();
+    sys.update(em, 0.016);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -15,6 +15,6 @@ describe('Homepage', () => {
   });
 
   it('contains a call to action to the gallery page', () => {
-    expect(indexHtml).toContain('class="cta-button" href="/gallery.html"');
+    expect(indexHtml).toMatch(/<a[^>]*class="cta-button"[^>]*href="\/gallery\.html"[^>]*>/);
   });
 });

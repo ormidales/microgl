@@ -112,7 +112,7 @@ export class EntityManager {
    * Return all entity ids that possess **every** component type listed.
    */
   getEntitiesWith(...componentTypes: string[]): EntityId[] {
-    const key = componentTypes.length === 0 ? '' : [...new Set(componentTypes)].sort().join('|');
+    const key = this.getViewKey(componentTypes);
     let view = this.views.get(key);
     if (!view) {
       const normalizedTypes = key ? key.split('|') : [];
@@ -134,6 +134,33 @@ export class EntityManager {
       }
     }
     return [...view.entities];
+  }
+
+  private getViewKey(componentTypes: string[]): string {
+    if (componentTypes.length === 0) return '';
+    if (componentTypes.length === 1) return componentTypes[0];
+
+    let isSortedAndUnique = true;
+    for (let i = 1; i < componentTypes.length; i++) {
+      if (componentTypes[i - 1] >= componentTypes[i]) {
+        isSortedAndUnique = false;
+        break;
+      }
+    }
+
+    if (isSortedAndUnique) {
+      return componentTypes.join('|');
+    }
+
+    const normalized = componentTypes.slice().sort();
+    let writeIndex = 1;
+    for (let readIndex = 1; readIndex < normalized.length; readIndex++) {
+      if (normalized[readIndex] !== normalized[writeIndex - 1]) {
+        normalized[writeIndex++] = normalized[readIndex];
+      }
+    }
+    normalized.length = writeIndex;
+    return normalized.join('|');
   }
 
   private updateEntityInViews(id: EntityId, signature: Set<string>, changedComponentType?: string): void {

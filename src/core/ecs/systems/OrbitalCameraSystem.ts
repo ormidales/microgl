@@ -12,6 +12,10 @@ import type { CameraComponent } from '../components/CameraComponent';
  * and zoom (scroll wheel).
  */
 export class OrbitalCameraSystem extends System {
+  private static readonly WHEEL_LINE_HEIGHT = 16;
+  private static readonly WHEEL_PAGE_HEIGHT = 800;
+  private static readonly WHEEL_DELTA_NORMALIZER = 120;
+
   public readonly requiredComponents = ['Camera'] as const;
 
   // ---- Orbital sensitivity --------------------------------------------------
@@ -194,6 +198,13 @@ export class OrbitalCameraSystem extends System {
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    this.deltaZoom += Math.sign(e.deltaY) * this.zoomSensitivity;
+    let deltaY = e.deltaY;
+    if (e.deltaMode === 1) {
+      deltaY *= OrbitalCameraSystem.WHEEL_LINE_HEIGHT;
+    } else if (e.deltaMode === 2) {
+      deltaY *= this.canvas?.height || OrbitalCameraSystem.WHEEL_PAGE_HEIGHT;
+    }
+
+    this.deltaZoom += (deltaY / OrbitalCameraSystem.WHEEL_DELTA_NORMALIZER) * this.zoomSensitivity;
   }
 }

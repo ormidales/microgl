@@ -551,7 +551,7 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.phi).toBeCloseTo(1.7);
   });
 
-  it('normalizes wheel zoom to direction only', () => {
+  it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
@@ -578,16 +578,26 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
-    wheel?.({ deltaY: 120, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 120, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterLargeStep = cam.radius;
+    const radiusAfterPixelStep = cam.radius;
 
-    wheel?.({ deltaY: 1, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 1, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterSmallStep = cam.radius;
+    const radiusAfterSmallPixelStep = cam.radius;
 
-    expect(preventDefault).toHaveBeenCalledTimes(2);
-    expect(radiusAfterLargeStep).toBeCloseTo(startRadius + 0.01);
-    expect(radiusAfterSmallStep).toBeCloseTo(startRadius + 0.02);
+    wheel?.({ deltaY: 7.5, deltaMode: 1, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterLineStep = cam.radius;
+
+    wheel?.({ deltaY: 1.2, deltaMode: 2, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterPageStep = cam.radius;
+
+    expect(preventDefault).toHaveBeenCalledTimes(4);
+    expect(radiusAfterPixelStep - startRadius).toBeCloseTo(0.01);
+    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 8);
+    expect(radiusAfterLineStep - radiusAfterSmallPixelStep).toBeCloseTo(0.01);
+    expect(radiusAfterPageStep - radiusAfterLineStep).toBeCloseTo(0.01);
   });
 });

@@ -242,7 +242,7 @@ describe('RenderSystem', () => {
       id,
       new MeshComponent(
         new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
-        new Uint16Array(0),
+        new Uint16Array([0, 1, 2]),
         new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
         new Float32Array([0, 0, 1, 0, 0, 1]),
       ),

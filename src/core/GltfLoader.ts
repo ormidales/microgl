@@ -224,6 +224,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
         buffers,
         positionAccessorIndex,
       );
+      if (positions.length === 0) continue;
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
         : new Float32Array(0);

@@ -599,6 +599,27 @@ describe('loadGltf', () => {
     expect(result.meshes[0].positions.length).toBe(9);
   });
 
+  it('skips primitives with empty POSITION accessor', async () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{
+        primitives: [{ attributes: { POSITION: 0 } }],
+      }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 0, type: 'VEC3' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 0 },
+      ],
+      buffers: [{ byteLength: 0 }],
+    };
+
+    json.buffers = [{ uri: 'data:application/octet-stream;base64,', byteLength: 0 }];
+    const result = await loadGltf(jsonToBuffer(json));
+
+    expect(result.meshes).toHaveLength(0);
+  });
+
   it('propagates POSITION accessor min/max bounds', async () => {
     const { json, bin } = triangleAsset();
     json.accessors![0].min = [0, 0, 0];

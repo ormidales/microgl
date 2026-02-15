@@ -416,6 +416,30 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.view[12]).not.toBe(0); // translation component of lookAt
   });
 
+  it('uses drawing buffer size for projection aspect ratio', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const canvas = {
+      width: 400,
+      height: 200,
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+    sys.attach(canvas);
+    sys.update(em, 0.016);
+
+    expect(perspectiveSpy).toHaveBeenCalled();
+    expect(perspectiveSpy.mock.calls[0][2]).toBeCloseTo(2);
+    perspectiveSpy.mockRestore();
+  });
+
   it('does not rebuild matrices when there is no input and canvas size is unchanged', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -488,6 +512,8 @@ describe('OrbitalCameraSystem', () => {
 
     const listeners = new Map<string, EventListener>();
     const canvas = {
+      width: 100,
+      height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
@@ -533,6 +559,8 @@ describe('OrbitalCameraSystem', () => {
 
     const listeners = new Map<string, EventListener>();
     const canvas = {
+      width: 100,
+      height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {

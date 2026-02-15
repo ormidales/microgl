@@ -20,8 +20,10 @@ describe('Demo scene layout', () => {
   });
 
   it('updates transform rotation values from Time.deltaTime and displays them', () => {
-    expect(transformDemoSource).toContain('transform.rotationX += deltaTime');
-    expect(transformDemoSource).toContain('transform.rotationY += deltaTime * 1.4');
+    expect(transformDemoSource).toContain('const ROTATION_X_SPEED = 1');
+    expect(transformDemoSource).toContain('const ROTATION_Y_SPEED = 1.4');
+    expect(transformDemoSource).toContain('transform.rotationX += deltaTime * ROTATION_X_SPEED');
+    expect(transformDemoSource).toContain('transform.rotationY += deltaTime * ROTATION_Y_SPEED');
     expect(transformDemoSource).toContain("rotationXLabel.textContent = 'Rotation X: '");
     expect(transformDemoSource).toContain("rotationYLabel.textContent = 'Rotation Y: '");
   });

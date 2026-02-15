@@ -12,6 +12,9 @@ import {
   TransformComponent,
 } from '../core/ecs';
 
+const ROTATION_X_SPEED = 1;
+const ROTATION_Y_SPEED = 1.4;
+
 class RotateCubeSystem extends System {
   public readonly requiredComponents = ['Transform'] as const;
 
@@ -27,8 +30,8 @@ class RotateCubeSystem extends System {
     for (const id of entities) {
       const transform = em.getComponent<TransformComponent>(id, 'Transform');
       if (!transform) continue;
-      transform.rotationX += deltaTime;
-      transform.rotationY += deltaTime * 1.4;
+      transform.rotationX += deltaTime * ROTATION_X_SPEED;
+      transform.rotationY += deltaTime * ROTATION_Y_SPEED;
       this.rotationXValue.textContent = transform.rotationX.toFixed(2);
       this.rotationYValue.textContent = transform.rotationY.toFixed(2);
     }

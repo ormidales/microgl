@@ -35,7 +35,7 @@ export function createDemoLayout(title: string): DemoLayout {
 
   const performancePanel = document.createElement('aside');
   performancePanel.className = 'demo-performance-panel';
-  performancePanel.setAttribute('aria-live', 'polite');
+  performancePanel.setAttribute('aria-live', 'off');
 
   const fpsLabel = document.createElement('p');
   fpsLabel.textContent = 'FPS: ';

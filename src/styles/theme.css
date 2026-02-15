@@ -99,3 +99,7 @@ a {
   border: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
   pointer-events: none;
 }
+
+.demo-performance-panel p {
+  margin: 0;
+}

@@ -41,4 +41,19 @@ describe('Time', () => {
 
     expect(time.deltaTime).toBe(0);
   });
+
+  it('requires explicit timestamps for pause and resume', () => {
+    const time = new Time();
+
+    const assertNowMsRequired = () => {
+      // @ts-expect-error nowMs is required
+      time.pause();
+      // @ts-expect-error nowMs is required
+      time.resume();
+    };
+
+    expect(assertNowMsRequired).toBeTypeOf('function');
+    expect(time.pause.length).toBe(1);
+    expect(time.resume.length).toBe(1);
+  });
 });

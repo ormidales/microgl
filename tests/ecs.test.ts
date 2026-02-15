@@ -5,7 +5,7 @@ import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
 import { RenderSystem } from '../src/core/ecs/systems/RenderSystem';
 import { OrbitalCameraSystem } from '../src/core/ecs/systems/OrbitalCameraSystem';
-import { vec3 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // EntityManager
@@ -85,6 +85,36 @@ describe('EntityManager', () => {
     expect(transforms).not.toContain(c);
   });
 
+  it('reuses cached views for equivalent component queries', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.getEntitiesWith('Transform', 'Mesh');
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    expect((em as any).views.size).toBe(1);
+  });
+
+  it('keeps cached views in sync when components change', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    em.getEntitiesWith('Transform');
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+
+    em.addComponent(id, new TransformComponent());
+    expect(em.getEntitiesWith('Transform')).toEqual([id]);
+
+    em.removeComponent(id, 'Transform');
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+
+    em.addComponent(id, new TransformComponent());
+    em.destroyEntity(id);
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+  });
+
   it('ignores addComponent on non-existent entity', () => {
     const em = new EntityManager();
     em.addComponent(999, new TransformComponent());
@@ -151,6 +181,7 @@ describe('RenderSystem', () => {
       FLOAT: 0x1406,
       TRIANGLES: 0x0004,
       UNSIGNED_SHORT: 0x1403,
+      UNSIGNED_INT: 0x1405,
       createVertexArray: vi.fn(() => ({} as WebGLVertexArrayObject)),
       createBuffer: vi.fn(() => ({} as WebGLBuffer)),
       bindVertexArray: vi.fn(),
@@ -196,7 +227,10 @@ describe('RenderSystem', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     em.addComponent(id, new TransformComponent());
-    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
 
     const { gl, material, sys } = createRenderSystemWithMocks();
 
@@ -205,6 +239,37 @@ describe('RenderSystem', () => {
     expect(material.use).toHaveBeenCalled();
     expect(material.setMat4).toHaveBeenCalledWith('u_model', expect.any(Float32Array));
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
+  });
+
+  it('computes the same model matrix as sequential TRS operations', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent(1, -2, 3, 0.4, -0.7, 1.1, 2, 3, 4));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { material, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    const modelCall = material.setMat4.mock.calls.find(
+      (call: [string, Float32Array]) => call[0] === 'u_model',
+    );
+    expect(modelCall).toBeDefined();
+
+    const expectedModel = mat4.create();
+    mat4.translate(expectedModel, expectedModel, vec3.fromValues(1, -2, 3));
+    mat4.rotateX(expectedModel, expectedModel, 0.4);
+    mat4.rotateY(expectedModel, expectedModel, -0.7);
+    mat4.rotateZ(expectedModel, expectedModel, 1.1);
+    mat4.scale(expectedModel, expectedModel, vec3.fromValues(2, 3, 4));
+
+    const modelMatrix = modelCall?.[1];
+    expect(modelMatrix).toBeInstanceOf(Float32Array);
+    for (let i = 0; i < expectedModel.length; i++) {
+      expect(modelMatrix?.[i]).toBeCloseTo(expectedModel[i], 6);
+    }
   });
 
   it('issues drawElements for indexed meshes', () => {
@@ -229,6 +294,164 @@ describe('RenderSystem', () => {
       gl.UNSIGNED_SHORT,
       0,
     );
+  });
+
+  it('issues drawElements with UNSIGNED_INT for Uint32 indices', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint32Array([0, 1, 70000]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.drawElements).toHaveBeenCalledWith(
+      gl.TRIANGLES,
+      3,
+      gl.UNSIGNED_INT,
+      0,
+    );
+  });
+
+  it('binds normal and uv attributes when provided', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+        new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+        new Float32Array([0, 0, 1, 0, 0, 1]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.enableVertexAttribArray).toHaveBeenCalledWith(1);
+    expect(gl.enableVertexAttribArray).toHaveBeenCalledWith(2);
+    expect(gl.vertexAttribPointer).toHaveBeenCalledWith(1, 3, gl.FLOAT, false, 0, 0);
+    expect(gl.vertexAttribPointer).toHaveBeenCalledWith(2, 2, gl.FLOAT, false, 0, 0);
+  });
+
+  it('releases GPU mesh buffers when Mesh component is removed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.removeComponent(id, 'Mesh');
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases optional GPU buffers for normals and uvs', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint16Array([0, 1, 2]),
+        new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+        new Float32Array([0, 0, 1, 0, 0, 1]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.removeComponent(id, 'Mesh');
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(4);
+  });
+
+  it('releases GPU mesh buffers when entity is destroyed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id);
+    sys.update(em, 0.016);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns once when mesh buffer allocation fails consecutively', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0])));
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(gl.createVertexArray).mockReturnValue(null);
+
+    sys.update(em, 0.016);
+    expect(warnSpy).not.toHaveBeenCalled();
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
+
+  it('resets consecutive allocation failures after a successful allocation', () => {
+    const em = new EntityManager();
+    const id1 = em.createEntity();
+    em.addComponent(id1, new TransformComponent());
+    em.addComponent(id1, new MeshComponent(new Float32Array([0, 0, 0])));
+    const id2 = em.createEntity();
+    em.addComponent(id2, new TransformComponent());
+    em.addComponent(id2, new MeshComponent(new Float32Array([0, 0, 0])));
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(gl.createVertexArray)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce({} as WebGLVertexArrayObject)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null);
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+    expect(warnSpy).not.toHaveBeenCalled();
+    sys.update(em, 0.016);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
   });
 });
 
@@ -294,6 +517,48 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.view[12]).not.toBe(0); // translation component of lookAt
   });
 
+  it('uses drawing buffer size for projection aspect ratio', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const canvas = {
+      width: 400,
+      height: 200,
+      clientWidth: 100,
+      clientHeight: 100,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+    sys.attach(canvas);
+    sys.update(em, 0.016);
+
+    expect(perspectiveSpy).toHaveBeenCalled();
+    expect(perspectiveSpy.mock.calls[0][2]).toBeCloseTo(2);
+    perspectiveSpy.mockRestore();
+  });
+
+  it('does not rebuild matrices when there is no input and canvas size is unchanged', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const sys = new OrbitalCameraSystem();
+    const lookAtSpy = vi.spyOn(mat4, 'lookAt');
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(lookAtSpy).toHaveBeenCalledTimes(1);
+    expect(perspectiveSpy).toHaveBeenCalledTimes(1);
+    lookAtSpy.mockRestore();
+    perspectiveSpy.mockRestore();
+  });
+
   it('clamps phi to avoid poles', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -348,6 +613,8 @@ describe('OrbitalCameraSystem', () => {
 
     const listeners = new Map<string, EventListener>();
     const canvas = {
+      width: 100,
+      height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
@@ -385,7 +652,32 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.phi).toBeCloseTo(1.7);
   });
 
-  it('normalizes wheel zoom to direction only', () => {
+  it('detaches touchmove and wheel listeners with passive false options', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+
+    const touchMoveHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchmove',
+    )?.[1];
+    const wheelHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'wheel',
+    )?.[1];
+
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('touchmove', touchMoveHandler, {
+      passive: false,
+    });
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('wheel', wheelHandler, {
+      passive: false,
+    });
+  });
+
+  it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
@@ -393,6 +685,8 @@ describe('OrbitalCameraSystem', () => {
 
     const listeners = new Map<string, EventListener>();
     const canvas = {
+      width: 100,
+      height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
@@ -410,16 +704,26 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
-    wheel?.({ deltaY: 120, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 120, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterLargeStep = cam.radius;
+    const radiusAfterPixelStep = cam.radius;
 
-    wheel?.({ deltaY: 1, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 1, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterSmallStep = cam.radius;
+    const radiusAfterSmallPixelStep = cam.radius;
 
-    expect(preventDefault).toHaveBeenCalledTimes(2);
-    expect(radiusAfterLargeStep).toBeCloseTo(startRadius + 0.01);
-    expect(radiusAfterSmallStep).toBeCloseTo(startRadius + 0.02);
+    wheel?.({ deltaY: 7.5, deltaMode: 1, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterLineStep = cam.radius;
+
+    wheel?.({ deltaY: 1.2, deltaMode: 2, preventDefault } as unknown as Event);
+    sys.update(em, 0.016);
+    const radiusAfterPageStep = cam.radius;
+
+    expect(preventDefault).toHaveBeenCalledTimes(4);
+    expect(radiusAfterPixelStep - startRadius).toBeCloseTo(0.01);
+    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 6);
+    expect(radiusAfterLineStep - radiusAfterSmallPixelStep).toBeCloseTo(0.01);
+    expect(radiusAfterPageStep - radiusAfterLineStep).toBeCloseTo(0.01);
   });
 });

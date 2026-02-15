@@ -47,7 +47,7 @@ export class Material {
   public program: WebGLProgram;
 
   private gl: WebGL2RenderingContext;
-  private readonly uniformLocations: Map<string, WebGLUniformLocation> = new Map();
+  private readonly uniformLocations: Map<string, WebGLUniformLocation | null> = new Map();
   private readonly vertexSource: string;
   private readonly fragmentSource: string;
 
@@ -123,9 +123,16 @@ export class Material {
 
   /** Rebuild the GPU program (typically after `webglcontextrestored`) and reset cached uniforms. */
   restore(gl: WebGL2RenderingContext = this.gl): void {
+    const previousGl = this.gl;
     this.gl = gl;
-    this.uniformLocations.clear();
-    this.program = this.createProgram();
+    try {
+      const restoredProgram = this.createProgram();
+      this.uniformLocations.clear();
+      this.program = restoredProgram;
+    } catch (error) {
+      this.gl = previousGl;
+      throw error;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -137,13 +144,10 @@ export class Material {
    * Returns `null` for inactive/optimized-away uniforms (WebGL spec compliant).
    */
   private location(name: string): WebGLUniformLocation | null {
-    const cached = this.uniformLocations.get(name);
-    if (cached !== undefined) return cached;
+    if (this.uniformLocations.has(name)) return this.uniformLocations.get(name) ?? null;
 
     const loc = this.gl.getUniformLocation(this.program, name);
-    if (loc !== null) {
-      this.uniformLocations.set(name, loc);
-    }
+    this.uniformLocations.set(name, loc);
     return loc;
   }
 

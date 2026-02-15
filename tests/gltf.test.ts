@@ -3,10 +3,10 @@ import {
   loadGltf,
   parseContainer,
   readAccessorFloat,
-  readAccessorUint16,
+  readAccessorIndices,
 } from '../src/core/GltfLoader';
 import type { GltfAsset } from '../src/core/GltfTypes';
-import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE } from '../src/core/GltfTypes';
+import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 
 // ---------------------------------------------------------------------------
@@ -133,6 +133,11 @@ describe('parseContainer', () => {
 
     expect(json.asset.version).toBe('2.0');
     expect(binChunk).toBeUndefined();
+  });
+
+  it('rejects oversized plain JSON glTF payloads before decode', () => {
+    const oversized = new ArrayBuffer((64 * 1024 * 1024) + 1);
+    expect(() => parseContainer(oversized)).toThrow(/payload too large/);
   });
 
   it('parses GLB container with JSON + BIN chunks', () => {
@@ -288,15 +293,15 @@ describe('readAccessorFloat', () => {
 });
 
 // ---------------------------------------------------------------------------
-// readAccessorUint16
+// readAccessorIndices
 // ---------------------------------------------------------------------------
 
-describe('readAccessorUint16', () => {
+describe('readAccessorIndices', () => {
   it('reads SCALAR unsigned short index accessor', () => {
     const { json, bin } = triangleAsset();
     const buffers = [bin];
 
-    const indices = readAccessorUint16(json, buffers, 1);
+    const indices = readAccessorIndices(json, buffers, 1);
 
     expect(indices).toBeInstanceOf(Uint16Array);
     expect(indices.length).toBe(3);
@@ -316,13 +321,31 @@ describe('readAccessorUint16', () => {
       buffers: [{ byteLength: 3 }],
     };
 
-    const indices = readAccessorUint16(json, [bin], 0);
+    const indices = readAccessorIndices(json, [bin], 0);
     expect(Array.from(indices)).toEqual([0, 1, 2]);
+  });
+
+  it('reads UNSIGNED_INT indices as Uint32', () => {
+    const intIndices = new Uint32Array([0, 1, 70000]);
+    const bin = intIndices.buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_INT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    const indices = readAccessorIndices(json, [bin], 0);
+    expect(indices).toBeInstanceOf(Uint32Array);
+    expect(Array.from(indices)).toEqual([0, 1, 70000]);
   });
 
   it('returns empty array for undefined index', () => {
     const json = minimalGltf();
-    const result = readAccessorUint16(json, [], undefined);
+    const result = readAccessorIndices(json, [], undefined);
     expect(result.length).toBe(0);
   });
 
@@ -337,7 +360,7 @@ describe('readAccessorUint16', () => {
       buffers: [{ byteLength: 6 }],
     };
 
-    expect(() => readAccessorUint16(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+    expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
 });
 
@@ -381,6 +404,25 @@ describe('loadGltf', () => {
       const result = await loadGltf(buffer);
       expect(fetchSpy).toHaveBeenCalledWith(uri);
       expect(result.meshes).toHaveLength(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('falls back to direct base64 decoding when fetch rejects data URI', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:application/octet-stream;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('NetworkError'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+      expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
     } finally {
       fetchSpy.mockRestore();
     }
@@ -557,10 +599,44 @@ describe('loadGltf', () => {
     expect(result.meshes[0].positions.length).toBe(9);
   });
 
+  it('skips primitives with empty POSITION accessor', async () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{
+        primitives: [{ attributes: { POSITION: 0 } }],
+      }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 0, type: 'VEC3' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 0 },
+      ],
+      buffers: [{ byteLength: 0 }],
+    };
+
+    json.buffers = [{ uri: 'data:application/octet-stream;base64,', byteLength: 0 }];
+    const result = await loadGltf(jsonToBuffer(json));
+
+    expect(result.meshes).toHaveLength(0);
+  });
+
   it('propagates POSITION accessor min/max bounds', async () => {
     const { json, bin } = triangleAsset();
     json.accessors![0].min = [0, 0, 0];
     json.accessors![0].max = [1, 1, 0];
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].min).toEqual([0, 0, 0]);
+    expect(result.meshes[0].max).toEqual([1, 1, 0]);
+  });
+
+  it('computes POSITION bounds when accessor min/max are missing', async () => {
+    const { json, bin } = triangleAsset();
+    json.accessors![0].min = undefined;
+    json.accessors![0].max = undefined;
     json.buffers = [{ byteLength: bin.byteLength }];
 
     const glb = buildGlb(json, bin);

@@ -30,6 +30,7 @@ const GLB_MAGIC = 0x46546C67; // "glTF"
 const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
+const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -77,6 +78,12 @@ export function parseContainer(buffer: ArrayBuffer): {
   }
 
   // Treat the whole buffer as UTF-8 JSON
+  if (buffer.byteLength > MAX_JSON_BUFFER_BYTES) {
+    throw new Error(
+      `JSON glTF payload too large (${buffer.byteLength} bytes). ` +
+      `Maximum supported size is ${MAX_JSON_BUFFER_BYTES} bytes.`,
+    );
+  }
   const text = UTF8_DECODER.decode(buffer);
   const json = JSON.parse(text) as GltfAsset;
   return { json, binChunk: undefined };
@@ -174,11 +181,27 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error(`Failed to decode data URI (status ${response.status}).`);
+  let fetchFailure: Error | undefined;
+  try {
+    const response = await fetch(uri);
+    if (response.ok) {
+      return await response.arrayBuffer();
+    }
+    fetchFailure = new Error(`status ${response.status}`);
+  } catch (error) {
+    // Fall back to manual decoding when fetch fails (e.g. oversized data URI).
+    fetchFailure = error instanceof Error ? error : new Error('network failure');
   }
-  return await response.arrayBuffer();
+  const header = uri.slice(0, commaIndex).toLowerCase();
+  if (!header.includes(';base64')) {
+    throw new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
+  }
+  const binary = atob(uri.slice(commaIndex + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +224,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
         buffers,
         positionAccessorIndex,
       );
+      if (positions.length === 0) continue;
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
         : new Float32Array(0);
@@ -208,7 +232,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
         ? readAccessorFloat(json, buffers, prim.attributes['TEXCOORD_0'])
         : new Float32Array(0);
       const indices = prim.indices !== undefined
-        ? readAccessorUint16(json, buffers, prim.indices)
+        ? readAccessorIndices(json, buffers, prim.indices)
         : new Uint16Array(0);
 
       const name = mesh.name
@@ -217,14 +241,45 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const positionAccessor = positionAccessorIndex !== undefined
         ? getAccessor(json, positionAccessorIndex)
         : undefined;
-      const min = positionAccessor?.min ?? [];
-      const max = positionAccessor?.max ?? [];
+      const computedBounds = (positionAccessor?.min === undefined || positionAccessor?.max === undefined)
+        ? computePositionBounds(positions)
+        : undefined;
+      const min = positionAccessor?.min ?? computedBounds?.min ?? [];
+      const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
       result.push({ name, positions, normals, uvs, indices, min, max });
     }
   }
 
   return result;
+}
+
+function computePositionBounds(positions: Float32Array): { min: number[]; max: number[] } {
+  if (positions.length < 3) {
+    return { min: [], max: [] };
+  }
+
+  let minX = positions[0];
+  let minY = positions[1];
+  let minZ = positions[2];
+  let maxX = positions[0];
+  let maxY = positions[1];
+  let maxZ = positions[2];
+
+  for (let i = 3; i + 2 < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    if (z > maxZ) maxZ = z;
+  }
+
+  return { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] };
 }
 
 // ---------------------------------------------------------------------------
@@ -276,14 +331,14 @@ export function readAccessorFloat(
 }
 
 /**
- * Read an accessor as a `Uint16Array` (used for index buffers).
+ * Read an accessor as an index array (used for index buffers).
  * Supports UNSIGNED_BYTE, UNSIGNED_SHORT, and UNSIGNED_INT sources.
  */
-export function readAccessorUint16(
+export function readAccessorIndices(
   json: GltfAsset,
   buffers: ArrayBuffer[],
   accessorIndex: number | undefined,
-): Uint16Array {
+): Uint16Array | Uint32Array {
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
@@ -302,7 +357,14 @@ export function readAccessorUint16(
     return new Uint16Array(data, byteOffset, count);
   }
 
-  const out = new Uint16Array(count);
+  // Fast path: tightly packed unsigned ints
+  if (accessor.componentType === GL_UNSIGNED_INT && stride === 4) {
+    return new Uint32Array(data, byteOffset, count);
+  }
+
+  const out = accessor.componentType === GL_UNSIGNED_INT
+    ? new Uint32Array(count)
+    : new Uint16Array(count);
   const view = new DataView(data);
 
   for (let i = 0; i < count; i++) {
@@ -313,10 +375,21 @@ export function readAccessorUint16(
       out[i] = view.getUint16(offset, true);
     } else if (accessor.componentType === GL_UNSIGNED_INT) {
       out[i] = view.getUint32(offset, true);
+    } else {
+      throw new Error(`Unsupported index component type: ${accessor.componentType}`);
     }
   }
 
   return out;
+}
+
+/** @deprecated Use readAccessorIndices instead. */
+export function readAccessorUint16(
+  json: GltfAsset,
+  buffers: ArrayBuffer[],
+  accessorIndex: number | undefined,
+): Uint16Array | Uint32Array {
+  return readAccessorIndices(json, buffers, accessorIndex);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,3 @@
-import { runTransformDemo } from './demos/transform';
+import { runCameraDemo } from './demos/camera';
 
-runTransformDemo();
+runCameraDemo();

@@ -127,6 +127,34 @@ describe('EntityManager', () => {
     expect(em.getEntitiesWith('Transform')).toEqual([]);
   });
 
+  it('removes empty cached views and indexes when an entity is destroyed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    em.destroyEntity(id);
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
+  });
+
+  it('removes empty cached views and indexes when components no longer match', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    em.removeComponent(id, 'Mesh');
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
+  });
+
   it('ignores addComponent on non-existent entity', () => {
     const em = new EntityManager();
     em.addComponent(999, new TransformComponent());

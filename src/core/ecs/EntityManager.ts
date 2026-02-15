@@ -167,20 +167,38 @@ export class EntityManager {
     const keys = changedComponentType
       ? this.viewKeysByComponentType.get(changedComponentType) ?? new Set<string>()
       : this.views.keys();
-    for (const key of keys) {
+    for (const key of [...keys]) {
       const view = this.views.get(key);
       if (!view) continue;
       if (view.componentTypes.every((type) => signature.has(type))) {
         view.entities.add(id);
       } else {
         view.entities.delete(id);
+        if (view.entities.size === 0) {
+          this.deleteView(key, view.componentTypes);
+        }
       }
     }
   }
 
   private removeEntityFromViews(id: EntityId): void {
-    for (const view of this.views.values()) {
+    for (const [key, view] of this.views) {
       view.entities.delete(id);
+      if (view.entities.size === 0) {
+        this.deleteView(key, view.componentTypes);
+      }
+    }
+  }
+
+  private deleteView(key: string, componentTypes: string[]): void {
+    this.views.delete(key);
+    for (const componentType of componentTypes) {
+      const keys = this.viewKeysByComponentType.get(componentType);
+      if (!keys) continue;
+      keys.delete(key);
+      if (keys.size === 0) {
+        this.viewKeysByComponentType.delete(componentType);
+      }
     }
   }
 }

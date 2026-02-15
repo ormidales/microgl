@@ -1,5 +1,6 @@
 export interface DemoLayout {
   canvasContainer: HTMLDivElement;
+  performancePanel: HTMLElement;
   fpsValue: HTMLOutputElement;
 }
 
@@ -49,5 +50,5 @@ export function createDemoLayout(title: string): DemoLayout {
   shell.append(topbar, stage);
   document.body.append(shell);
 
-  return { canvasContainer, fpsValue };
+  return { canvasContainer, performancePanel, fpsValue };
 }

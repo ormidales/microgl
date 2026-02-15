@@ -1,6 +1,7 @@
 import { Renderer } from './core/Renderer';
 import { Time } from './core/Time';
 import { Material } from './core/Material';
+import { createDemoLayout } from './demoLayout';
 import {
   EntityManager,
   TransformComponent,
@@ -10,7 +11,8 @@ import {
   OrbitalCameraSystem,
 } from './core/ecs';
 
-const renderer = new Renderer();
+const layout = createDemoLayout('ECS demo');
+const renderer = new Renderer(layout.canvasContainer);
 const time = new Time();
 const material = new Material(renderer.gl);
 
@@ -41,6 +43,9 @@ em.addComponent(
 
 function loop(now: number): void {
   time.update(now);
+  if (time.deltaTime > 0) {
+    layout.fpsValue.textContent = (1 / time.deltaTime).toFixed(0);
+  }
   renderer.clear(0.1, 0.1, 0.1, 1.0);
 
   // Update all ECS systems

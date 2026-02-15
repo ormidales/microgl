@@ -7,6 +7,8 @@ import type { TransformComponent } from '../components/TransformComponent';
 import type { MeshComponent } from '../components/MeshComponent';
 import type { CameraComponent } from '../components/CameraComponent';
 
+const CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD = 2;
+
 /**
  * Iterates over entities that have both a `Transform` and a `Mesh` component
  * and issues WebGL draw calls for each entity.
@@ -44,7 +46,7 @@ export class RenderSystem extends System {
   private markMeshBufferAllocationFailure(): null {
     this.consecutiveMeshBufferAllocationFailures += 1;
     if (
-      this.consecutiveMeshBufferAllocationFailures > 1
+      this.consecutiveMeshBufferAllocationFailures >= CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD
       && !this.warnedAboutMeshBufferAllocationFailure
     ) {
       console.warn(

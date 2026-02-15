@@ -166,8 +166,9 @@ export class EntityManager {
   private updateEntityInViews(id: EntityId, signature: Set<string>, changedComponentType?: string): void {
     const keys = changedComponentType
       ? this.viewKeysByComponentType.get(changedComponentType) ?? new Set<string>()
-      : this.views.keys();
-    for (const key of [...keys]) {
+      // We may delete views while iterating, so snapshot keys from `views` first.
+      : [...this.views.keys()];
+    for (const key of keys) {
       const view = this.views.get(key);
       if (!view) continue;
       if (view.componentTypes.every((type) => signature.has(type))) {

@@ -217,14 +217,45 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const positionAccessor = positionAccessorIndex !== undefined
         ? getAccessor(json, positionAccessorIndex)
         : undefined;
-      const min = positionAccessor?.min ?? [];
-      const max = positionAccessor?.max ?? [];
+      const computedBounds = (positionAccessor?.min === undefined || positionAccessor?.max === undefined)
+        ? computePositionBounds(positions)
+        : undefined;
+      const min = positionAccessor?.min ?? computedBounds?.min ?? [];
+      const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
       result.push({ name, positions, normals, uvs, indices, min, max });
     }
   }
 
   return result;
+}
+
+function computePositionBounds(positions: Float32Array): { min: number[]; max: number[] } {
+  if (positions.length < 3) {
+    return { min: [], max: [] };
+  }
+
+  let minX = positions[0];
+  let minY = positions[1];
+  let minZ = positions[2];
+  let maxX = positions[0];
+  let maxY = positions[1];
+  let maxZ = positions[2];
+
+  for (let i = 3; i + 2 < positions.length; i += 3) {
+    const x = positions[i];
+    const y = positions[i + 1];
+    const z = positions[i + 2];
+
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (z < minZ) minZ = z;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+    if (z > maxZ) maxZ = z;
+  }
+
+  return { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] };
 }
 
 // ---------------------------------------------------------------------------

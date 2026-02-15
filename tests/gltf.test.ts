@@ -569,6 +569,19 @@ describe('loadGltf', () => {
     expect(result.meshes[0].min).toEqual([0, 0, 0]);
     expect(result.meshes[0].max).toEqual([1, 1, 0]);
   });
+
+  it('computes POSITION bounds when accessor min/max are missing', async () => {
+    const { json, bin } = triangleAsset();
+    json.accessors![0].min = undefined;
+    json.accessors![0].max = undefined;
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].min).toEqual([0, 0, 0]);
+    expect(result.meshes[0].max).toEqual([1, 1, 0]);
+  });
 });
 
 // ---------------------------------------------------------------------------

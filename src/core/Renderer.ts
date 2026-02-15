@@ -23,7 +23,7 @@ export class Renderer {
       throw new Error('WebGL 2 is not supported by this browser.');
     }
     this.gl = ctx;
-    this.canvas.addEventListener('webglcontextlost', this.handleContextLost);
+    this.canvas.addEventListener('webglcontextlost', this.handleContextLost as EventListener);
     this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
 
     this.resizeViewport();
@@ -72,14 +72,14 @@ export class Renderer {
   /** Stop observing resize events and remove the canvas. */
   dispose(): void {
     this.resizeObserver.disconnect();
-    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost);
+    this.canvas.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
     this.contextLostHandlers.clear();
     this.contextRestoredHandlers.clear();
     this.canvas.remove();
   }
 
-  private readonly handleContextLost = (event: Event): void => {
+  private readonly handleContextLost = (event: WebGLContextEvent): void => {
     event.preventDefault();
     for (const handler of this.contextLostHandlers) {
       handler();

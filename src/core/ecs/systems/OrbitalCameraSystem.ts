@@ -15,6 +15,9 @@ export class OrbitalCameraSystem extends System {
   private static readonly WHEEL_LINE_HEIGHT = 16;
   private static readonly WHEEL_PAGE_HEIGHT = 800;
   private static readonly WHEEL_DELTA_NORMALIZER = 120;
+  private static readonly NON_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
+    passive: false,
+  };
 
   public readonly requiredComponents = ['Camera'] as const;
 
@@ -71,9 +74,13 @@ export class OrbitalCameraSystem extends System {
     canvas.addEventListener('mousemove', this.onMouseMove);
     canvas.addEventListener('mouseup', this.onMouseUp);
     canvas.addEventListener('touchstart', this.onTouchStart);
-    canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    canvas.addEventListener(
+      'touchmove',
+      this.onTouchMove,
+      OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
+    );
     canvas.addEventListener('touchend', this.onTouchEnd);
-    canvas.addEventListener('wheel', this.onWheel, { passive: false });
+    canvas.addEventListener('wheel', this.onWheel, OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS);
   }
 
   /** Remove previously registered event listeners. */
@@ -83,9 +90,17 @@ export class OrbitalCameraSystem extends System {
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
     this.canvas.removeEventListener('touchstart', this.onTouchStart);
-    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener(
+      'touchmove',
+      this.onTouchMove,
+      OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
+    );
     this.canvas.removeEventListener('touchend', this.onTouchEnd);
-    this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas.removeEventListener(
+      'wheel',
+      this.onWheel,
+      OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
+    );
     this.canvas = null;
   }
 

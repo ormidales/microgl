@@ -607,6 +607,31 @@ describe('OrbitalCameraSystem', () => {
     expect(cam.phi).toBeCloseTo(1.7);
   });
 
+  it('detaches touchmove and wheel listeners with passive false options', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+
+    const touchMoveHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchmove',
+    )?.[1];
+    const wheelHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'wheel',
+    )?.[1];
+
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('touchmove', touchMoveHandler, {
+      passive: false,
+    });
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('wheel', wheelHandler, {
+      passive: false,
+    });
+  });
+
   it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
     const em = new EntityManager();
     const id = em.createEntity();

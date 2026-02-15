@@ -97,6 +97,18 @@ describe('EntityManager', () => {
     expect((em as any).views.size).toBe(1);
   });
 
+  it('reuses cached views when query contains duplicate component types', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.getEntitiesWith('Transform', 'Mesh');
+    expect(em.getEntitiesWith('Transform', 'Mesh', 'Transform')).toEqual([id]);
+
+    expect((em as any).views.size).toBe(1);
+  });
+
   it('keeps cached views in sync when components change', () => {
     const em = new EntityManager();
     const id = em.createEntity();

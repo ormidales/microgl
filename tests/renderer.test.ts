@@ -30,6 +30,7 @@ class MockCanvas extends EventTarget {
 class MockResizeObserver {
   public static instances: MockResizeObserver[] = [];
   public readonly observe = vi.fn();
+  public readonly unobserve = vi.fn();
   public readonly disconnect = vi.fn();
   private readonly callback: ResizeObserverCallback;
 
@@ -165,5 +166,23 @@ describe('Renderer', () => {
     expect(canvas.width).toBe(400);
     expect(canvas.height).toBe(200);
     expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
+  });
+
+  it('unobserves canvas and clears resize observer on dispose', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+
+    renderer.dispose();
+
+    expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledWith(canvas);
+    expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
+    expect((renderer as unknown as { resizeObserver: ResizeObserver | null }).resizeObserver).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ export class Renderer {
   public readonly canvas: HTMLCanvasElement;
   public gl: WebGL2RenderingContext;
 
-  private resizeObserver: ResizeObserver;
+  private resizeObserver: ResizeObserver | null;
   private readonly contextAttributes?: WebGLContextAttributes;
   private readonly contextLostHandlers: Set<() => void> = new Set();
   private readonly contextRestoredHandlers: Set<(gl: WebGL2RenderingContext) => void> = new Set();
@@ -71,7 +71,9 @@ export class Renderer {
 
   /** Stop observing resize events and remove the canvas. */
   dispose(): void {
-    this.resizeObserver.disconnect();
+    this.resizeObserver?.unobserve(this.canvas);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored as EventListener);
     this.contextLostHandlers.clear();

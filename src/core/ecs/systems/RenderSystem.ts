@@ -149,8 +149,11 @@ export class RenderSystem extends System {
   resetGpuResources(): void {
     const gl = this.renderer?.gl;
     if (gl) {
-      for (const [mesh] of this.meshBuffers) this.releaseMeshBuffers(gl, mesh);
-      return;
+      for (const buffers of this.meshBuffers.values()) {
+        if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
+        gl.deleteBuffer(buffers.vbo);
+        gl.deleteVertexArray(buffers.vao);
+      }
     }
     this.meshBuffers = new Map();
   }

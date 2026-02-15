@@ -196,7 +196,10 @@ describe('RenderSystem', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     em.addComponent(id, new TransformComponent());
-    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
 
     const { gl, material, sys } = createRenderSystemWithMocks();
 
@@ -257,7 +260,10 @@ describe('RenderSystem', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     em.addComponent(id, new TransformComponent());
-    em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
 
     const { gl, sys } = createRenderSystemWithMocks();
     sys.update(em, 0.016);

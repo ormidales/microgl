@@ -1,6 +1,6 @@
 import { System } from '../System';
 import type { EntityManager } from '../EntityManager';
-import { mat4 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 import type { Renderer } from '../../Renderer';
 import type { Material } from '../../Material';
 import type { TransformComponent } from '../components/TransformComponent';
@@ -15,6 +15,9 @@ export class RenderSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
   private readonly identity = mat4.create();
   private readonly model = mat4.create();
+  private readonly rotation = quat.create();
+  private readonly translation = vec3.create();
+  private readonly scale = vec3.fromValues(1, 1, 1);
   private meshBuffers = new Map<
     MeshComponent,
     {
@@ -163,12 +166,13 @@ export class RenderSystem extends System {
       if (!transform || !mesh || mesh.vertices.length === 0) continue;
       activeMeshes.add(mesh);
 
-      mat4.identity(this.model);
-      mat4.translate(this.model, this.model, [transform.x, transform.y, transform.z]);
-      mat4.rotateX(this.model, this.model, transform.rotationX);
-      mat4.rotateY(this.model, this.model, transform.rotationY);
-      mat4.rotateZ(this.model, this.model, transform.rotationZ);
-      mat4.scale(this.model, this.model, [transform.scaleX, transform.scaleY, transform.scaleZ]);
+      vec3.set(this.translation, transform.x, transform.y, transform.z);
+      vec3.set(this.scale, transform.scaleX, transform.scaleY, transform.scaleZ);
+      quat.identity(this.rotation);
+      quat.rotateX(this.rotation, this.rotation, transform.rotationX);
+      quat.rotateY(this.rotation, this.rotation, transform.rotationY);
+      quat.rotateZ(this.rotation, this.rotation, transform.rotationZ);
+      mat4.fromRotationTranslationScale(this.model, this.rotation, this.translation, this.scale);
       this.material.setMat4('u_model', this.model);
 
       const buffers = this.ensureMeshBuffers(gl, mesh);

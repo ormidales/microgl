@@ -6,7 +6,7 @@ const demosHtml = readFileSync(new URL('../demos.html', import.meta.url), 'utf8'
 describe('Demos page', () => {
   it('renders a responsive demos grid with technical ECS descriptions', () => {
     expect(demosHtml).toContain('class="demos-grid"');
-    expect(demosHtml).toContain('TransformComponent');
+    expect(demosHtml).toContain('EntityManager cube grid');
     expect(demosHtml).toContain('OrbitalCameraSystem');
     expect(demosHtml).toContain('MeshComponent');
   });

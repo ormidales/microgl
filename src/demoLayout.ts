@@ -7,7 +7,7 @@ export interface DemoLayout {
 /**
  * Builds the shared DOM structure used by demo scenes.
  */
-export function createDemoLayout(title: string): DemoLayout {
+export function createDemoLayout(title: string, controls: string[] = []): DemoLayout {
   document.body.classList.add('demo-page');
   document.body.replaceChildren();
 
@@ -45,6 +45,12 @@ export function createDemoLayout(title: string): DemoLayout {
   fpsValue.textContent = '0';
   fpsLabel.append(fpsValue);
   performancePanel.append(fpsLabel);
+
+  for (const control of controls) {
+    const controlLabel = document.createElement('p');
+    controlLabel.textContent = control;
+    performancePanel.append(controlLabel);
+  }
 
   stage.append(canvasContainer, performancePanel);
   shell.append(topbar, stage);

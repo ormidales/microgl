@@ -677,6 +677,30 @@ describe('OrbitalCameraSystem', () => {
     });
   });
 
+  it('attaches touchstart and touchend listeners with passive true options', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+
+    const touchStartHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchstart',
+    )?.[1];
+    const touchEndHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchend',
+    )?.[1];
+
+    expect(canvas.addEventListener).toHaveBeenCalledWith('touchstart', touchStartHandler, {
+      passive: true,
+    });
+    expect(canvas.addEventListener).toHaveBeenCalledWith('touchend', touchEndHandler, {
+      passive: true,
+    });
+  });
+
   it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
     const em = new EntityManager();
     const id = em.createEntity();

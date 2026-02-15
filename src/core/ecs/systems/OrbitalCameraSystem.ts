@@ -18,6 +18,9 @@ export class OrbitalCameraSystem extends System {
   private static readonly NON_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
     passive: false,
   };
+  private static readonly PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
+    passive: true,
+  };
 
   public readonly requiredComponents = ['Camera'] as const;
 
@@ -73,13 +76,13 @@ export class OrbitalCameraSystem extends System {
     canvas.addEventListener('mousedown', this.onMouseDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
     canvas.addEventListener('mouseup', this.onMouseUp);
-    canvas.addEventListener('touchstart', this.onTouchStart);
+    canvas.addEventListener('touchstart', this.onTouchStart, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener(
       'touchmove',
       this.onTouchMove,
       OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
     );
-    canvas.addEventListener('touchend', this.onTouchEnd);
+    canvas.addEventListener('touchend', this.onTouchEnd, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener('wheel', this.onWheel, OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS);
   }
 
@@ -89,13 +92,21 @@ export class OrbitalCameraSystem extends System {
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
-    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener(
+      'touchstart',
+      this.onTouchStart,
+      OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
+    );
     this.canvas.removeEventListener(
       'touchmove',
       this.onTouchMove,
       OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
     );
-    this.canvas.removeEventListener('touchend', this.onTouchEnd);
+    this.canvas.removeEventListener(
+      'touchend',
+      this.onTouchEnd,
+      OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
+    );
     this.canvas.removeEventListener(
       'wheel',
       this.onWheel,

@@ -20,6 +20,8 @@ export class RenderSystem extends System {
     {
       vao: WebGLVertexArrayObject;
       vbo: WebGLBuffer;
+      normalVbo: WebGLBuffer | null;
+      uvVbo: WebGLBuffer | null;
       ebo: WebGLBuffer | null;
       vertexCount: number;
       indexCount: number;
@@ -39,6 +41,8 @@ export class RenderSystem extends System {
   ): {
     vao: WebGLVertexArrayObject;
     vbo: WebGLBuffer;
+    normalVbo: WebGLBuffer | null;
+    uvVbo: WebGLBuffer | null;
     ebo: WebGLBuffer | null;
     vertexCount: number;
     indexCount: number;
@@ -60,12 +64,47 @@ export class RenderSystem extends System {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
+    let normalVbo: WebGLBuffer | null = null;
+    if (mesh.normals.length > 0) {
+      normalVbo = gl.createBuffer();
+      if (!normalVbo) {
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        gl.deleteBuffer(vbo);
+        gl.deleteVertexArray(vao);
+        return null;
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, normalVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, mesh.normals, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(1);
+      gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    }
+
+    let uvVbo: WebGLBuffer | null = null;
+    if (mesh.uvs.length > 0) {
+      uvVbo = gl.createBuffer();
+      if (!uvVbo) {
+        gl.bindVertexArray(null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        if (normalVbo) gl.deleteBuffer(normalVbo);
+        gl.deleteBuffer(vbo);
+        gl.deleteVertexArray(vao);
+        return null;
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, uvVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(2);
+      gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
+    }
+
     let ebo: WebGLBuffer | null = null;
     if (mesh.indices.length > 0) {
       ebo = gl.createBuffer();
       if (!ebo) {
         gl.bindVertexArray(null);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
+        if (uvVbo) gl.deleteBuffer(uvVbo);
+        if (normalVbo) gl.deleteBuffer(normalVbo);
         gl.deleteBuffer(vbo);
         gl.deleteVertexArray(vao);
         return null;
@@ -81,6 +120,8 @@ export class RenderSystem extends System {
     const buffers = {
       vao,
       vbo,
+      normalVbo,
+      uvVbo,
       ebo,
       vertexCount: Math.floor(mesh.vertices.length / 3),
       indexCount: mesh.indices.length,
@@ -93,6 +134,8 @@ export class RenderSystem extends System {
     const buffers = this.meshBuffers.get(mesh);
     if (!buffers) return;
     if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
+    if (buffers.uvVbo) gl.deleteBuffer(buffers.uvVbo);
+    if (buffers.normalVbo) gl.deleteBuffer(buffers.normalVbo);
     gl.deleteBuffer(buffers.vbo);
     gl.deleteVertexArray(buffers.vao);
     this.meshBuffers.delete(mesh);
@@ -151,6 +194,8 @@ export class RenderSystem extends System {
     if (gl) {
       for (const buffers of this.meshBuffers.values()) {
         if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
+        if (buffers.uvVbo) gl.deleteBuffer(buffers.uvVbo);
+        if (buffers.normalVbo) gl.deleteBuffer(buffers.normalVbo);
         gl.deleteBuffer(buffers.vbo);
         gl.deleteVertexArray(buffers.vao);
       }

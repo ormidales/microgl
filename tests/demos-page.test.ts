@@ -12,7 +12,7 @@ describe('Demos page', () => {
   });
 
   it('contains clickable links for each demo card', () => {
-    expect(demosHtml).toMatch(/<a href="\/gallery\.html#entity-transform-pipeline">Open demo<\/a>/);
+    expect(demosHtml).toMatch(/<a href="\/demo\.html">Open demo<\/a>/);
     expect(demosHtml).toMatch(/<a href="\/gallery\.html#orbital-camera-control">Open demo<\/a>/);
     expect(demosHtml).toMatch(/<a href="\/gallery\.html#mesh-render-loop">Open demo<\/a>/);
   });

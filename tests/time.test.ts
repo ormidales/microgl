@@ -53,5 +53,7 @@ describe('Time', () => {
     };
 
     expect(assertNowMsRequired).toBeTypeOf('function');
+    expect(time.pause.length).toBe(1);
+    expect(time.resume.length).toBe(1);
   });
 });

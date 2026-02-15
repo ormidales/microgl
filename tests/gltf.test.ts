@@ -572,6 +572,8 @@ describe('loadGltf', () => {
 
   it('computes POSITION bounds when accessor min/max are missing', async () => {
     const { json, bin } = triangleAsset();
+    json.accessors![0].min = undefined;
+    json.accessors![0].max = undefined;
     json.buffers = [{ byteLength: bin.byteLength }];
 
     const glb = buildGlb(json, bin);

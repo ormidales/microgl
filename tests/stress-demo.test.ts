@@ -1,0 +1,22 @@
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+
+const mainSource = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+const stressDemoSource = readFileSync(new URL('../src/demos/stress.ts', import.meta.url), 'utf8');
+
+describe('Stress demo', () => {
+  it('routes the demo entrypoint to stress mode via URL search params', () => {
+    expect(mainSource).toContain("import { runStressDemo } from './demos/stress'");
+    expect(mainSource).toContain("new URLSearchParams(window.location.search).get('demo')");
+    expect(mainSource).toContain("if (demo === 'stress')");
+    expect(mainSource).toContain('runStressDemo()');
+    expect(mainSource).toContain('runGltfDemo()');
+  });
+
+  it('creates a large ECS scene with Transform+Mesh updates and live FPS display', () => {
+    expect(stressDemoSource).toContain('const ENTITY_GRID_SIZE = 100');
+    expect(stressDemoSource).toContain("public readonly requiredComponents = ['Transform', 'Mesh'] as const");
+    expect(stressDemoSource).toContain('em.getEntitiesWith(...this.requiredComponents)');
+    expect(stressDemoSource).toContain('layout.fpsValue.textContent = (1 / time.deltaTime).toFixed(0)');
+  });
+});

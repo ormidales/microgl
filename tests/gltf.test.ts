@@ -3,10 +3,10 @@ import {
   loadGltf,
   parseContainer,
   readAccessorFloat,
-  readAccessorUint16,
+  readAccessorIndices,
 } from '../src/core/GltfLoader';
 import type { GltfAsset } from '../src/core/GltfTypes';
-import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE } from '../src/core/GltfTypes';
+import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 
 // ---------------------------------------------------------------------------
@@ -293,15 +293,15 @@ describe('readAccessorFloat', () => {
 });
 
 // ---------------------------------------------------------------------------
-// readAccessorUint16
+// readAccessorIndices
 // ---------------------------------------------------------------------------
 
-describe('readAccessorUint16', () => {
+describe('readAccessorIndices', () => {
   it('reads SCALAR unsigned short index accessor', () => {
     const { json, bin } = triangleAsset();
     const buffers = [bin];
 
-    const indices = readAccessorUint16(json, buffers, 1);
+    const indices = readAccessorIndices(json, buffers, 1);
 
     expect(indices).toBeInstanceOf(Uint16Array);
     expect(indices.length).toBe(3);
@@ -321,13 +321,31 @@ describe('readAccessorUint16', () => {
       buffers: [{ byteLength: 3 }],
     };
 
-    const indices = readAccessorUint16(json, [bin], 0);
+    const indices = readAccessorIndices(json, [bin], 0);
     expect(Array.from(indices)).toEqual([0, 1, 2]);
+  });
+
+  it('reads UNSIGNED_INT indices as Uint32', () => {
+    const intIndices = new Uint32Array([0, 1, 70000]);
+    const bin = intIndices.buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_INT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    const indices = readAccessorIndices(json, [bin], 0);
+    expect(indices).toBeInstanceOf(Uint32Array);
+    expect(Array.from(indices)).toEqual([0, 1, 70000]);
   });
 
   it('returns empty array for undefined index', () => {
     const json = minimalGltf();
-    const result = readAccessorUint16(json, [], undefined);
+    const result = readAccessorIndices(json, [], undefined);
     expect(result.length).toBe(0);
   });
 
@@ -342,7 +360,7 @@ describe('readAccessorUint16', () => {
       buffers: [{ byteLength: 6 }],
     };
 
-    expect(() => readAccessorUint16(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+    expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
 });
 

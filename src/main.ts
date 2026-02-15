@@ -1,53 +1,10 @@
-import { Renderer } from './core/Renderer';
-import { Time } from './core/Time';
-import { Material } from './core/Material';
-import {
-  EntityManager,
-  TransformComponent,
-  MeshComponent,
-  CameraComponent,
-  RenderSystem,
-  OrbitalCameraSystem,
-} from './core/ecs';
+import { runGltfDemo } from './demos/gltf';
+import { runStressDemo } from './demos/stress';
 
-const renderer = new Renderer();
-const time = new Time();
-const material = new Material(renderer.gl);
+const demo = new URLSearchParams(window.location.search).get('demo');
 
-// --- ECS setup ---
-const em = new EntityManager();
-const renderSystem = new RenderSystem(renderer, material);
-const cameraSystem = new OrbitalCameraSystem();
-cameraSystem.attach(renderer.canvas);
-renderer.onContextLost(() => {
-  renderSystem.resetGpuResources();
-});
-renderer.onContextRestored((gl) => {
-  material.restore(gl);
-  renderSystem.resetGpuResources();
-});
-
-// Create a camera entity
-const camera = em.createEntity();
-em.addComponent(camera, new CameraComponent());
-
-// Create a sample entity with Transform + Mesh components
-const entity = em.createEntity();
-em.addComponent(entity, new TransformComponent(0, 1, -5));
-em.addComponent(
-  entity,
-  new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])),
-);
-
-function loop(now: number): void {
-  time.update(now);
-  renderer.clear(0.1, 0.1, 0.1, 1.0);
-
-  // Update all ECS systems
-  cameraSystem.update(em, time.deltaTime);
-  renderSystem.update(em, time.deltaTime);
-
-  requestAnimationFrame(loop);
+if (demo === 'stress') {
+  runStressDemo();
+} else {
+  runGltfDemo();
 }
-
-requestAnimationFrame(loop);

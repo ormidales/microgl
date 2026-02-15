@@ -13,4 +13,15 @@ describe('Vite config', () => {
     expect(external?.('my-gl-matrix')).toBeFalsy();
     expect(external?.('other-lib')).toBeFalsy();
   });
+
+  it('declares multiple HTML entry points', () => {
+    const config = typeof viteConfig === 'function' ? viteConfig({} as never) : viteConfig;
+    const input = config.build?.rollupOptions?.input as Record<string, string> | undefined;
+
+    expect(input).toBeDefined();
+    expect(input?.index.endsWith('index.html')).toBe(true);
+    expect(input?.gallery.endsWith('gallery.html')).toBe(true);
+    expect(input?.demos.endsWith('demos.html')).toBe(true);
+    expect(input?.demo.endsWith('demo.html')).toBe(true);
+  });
 });

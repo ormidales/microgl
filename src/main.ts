@@ -1,3 +1,3 @@
-import { runCameraDemo } from './demos/camera';
+import { runGltfDemo } from './demos/gltf';
 
-runCameraDemo();
+runGltfDemo();

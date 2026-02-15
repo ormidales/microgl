@@ -83,9 +83,9 @@ export class OrbitalCameraSystem extends System {
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
     this.canvas.removeEventListener('mouseup', this.onMouseUp);
     this.canvas.removeEventListener('touchstart', this.onTouchStart);
-    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove, { passive: false });
     this.canvas.removeEventListener('touchend', this.onTouchEnd);
-    this.canvas.removeEventListener('wheel', this.onWheel);
+    this.canvas.removeEventListener('wheel', this.onWheel, { passive: false });
     this.canvas = null;
   }
 

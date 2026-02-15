@@ -202,7 +202,7 @@ export class OrbitalCameraSystem extends System {
     if (e.deltaMode === 1) {
       deltaY *= OrbitalCameraSystem.WHEEL_LINE_HEIGHT;
     } else if (e.deltaMode === 2) {
-      deltaY *= this.canvas?.height || OrbitalCameraSystem.WHEEL_PAGE_HEIGHT;
+      deltaY *= this.canvas?.height ?? OrbitalCameraSystem.WHEEL_PAGE_HEIGHT;
     }
 
     this.deltaZoom += (deltaY / OrbitalCameraSystem.WHEEL_DELTA_NORMALIZER) * this.zoomSensitivity;

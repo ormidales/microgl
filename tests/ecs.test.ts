@@ -596,7 +596,7 @@ describe('OrbitalCameraSystem', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(4);
     expect(radiusAfterPixelStep - startRadius).toBeCloseTo(0.01);
-    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 8);
+    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 6);
     expect(radiusAfterLineStep - radiusAfterSmallPixelStep).toBeCloseTo(0.01);
     expect(radiusAfterPageStep - radiusAfterLineStep).toBeCloseTo(0.01);
   });

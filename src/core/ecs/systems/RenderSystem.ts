@@ -28,6 +28,7 @@ export class RenderSystem extends System {
       ebo: WebGLBuffer | null;
       vertexCount: number;
       indexCount: number;
+      indexType: number;
     }
   >();
 
@@ -49,6 +50,7 @@ export class RenderSystem extends System {
     ebo: WebGLBuffer | null;
     vertexCount: number;
     indexCount: number;
+    indexType: number;
   } | null {
     const cached = this.meshBuffers.get(mesh);
     if (cached) return cached;
@@ -128,6 +130,7 @@ export class RenderSystem extends System {
       ebo,
       vertexCount: Math.floor(mesh.vertices.length / 3),
       indexCount: mesh.indices.length,
+      indexType: mesh.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
     };
     this.meshBuffers.set(mesh, buffers);
     return buffers;
@@ -180,7 +183,7 @@ export class RenderSystem extends System {
 
       gl.bindVertexArray(buffers.vao);
       if (buffers.indexCount > 0) {
-        gl.drawElements(gl.TRIANGLES, buffers.indexCount, gl.UNSIGNED_SHORT, 0);
+        gl.drawElements(gl.TRIANGLES, buffers.indexCount, buffers.indexType, 0);
       } else {
         gl.drawArrays(gl.TRIANGLES, 0, buffers.vertexCount);
       }

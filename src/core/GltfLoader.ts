@@ -215,7 +215,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
         ? readAccessorFloat(json, buffers, prim.attributes['TEXCOORD_0'])
         : new Float32Array(0);
       const indices = prim.indices !== undefined
-        ? readAccessorUint16(json, buffers, prim.indices)
+        ? readAccessorIndices(json, buffers, prim.indices)
         : new Uint16Array(0);
 
       const name = mesh.name
@@ -314,14 +314,14 @@ export function readAccessorFloat(
 }
 
 /**
- * Read an accessor as a `Uint16Array` (used for index buffers).
+ * Read an accessor as an index array (used for index buffers).
  * Supports UNSIGNED_BYTE, UNSIGNED_SHORT, and UNSIGNED_INT sources.
  */
-export function readAccessorUint16(
+export function readAccessorIndices(
   json: GltfAsset,
   buffers: ArrayBuffer[],
   accessorIndex: number | undefined,
-): Uint16Array {
+): Uint16Array | Uint32Array {
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
@@ -340,7 +340,14 @@ export function readAccessorUint16(
     return new Uint16Array(data, byteOffset, count);
   }
 
-  const out = new Uint16Array(count);
+  // Fast path: tightly packed unsigned ints
+  if (accessor.componentType === GL_UNSIGNED_INT && stride === 4) {
+    return new Uint32Array(data, byteOffset, count);
+  }
+
+  const out = accessor.componentType === GL_UNSIGNED_INT
+    ? new Uint32Array(count)
+    : new Uint16Array(count);
   const view = new DataView(data);
 
   for (let i = 0; i < count; i++) {
@@ -351,10 +358,21 @@ export function readAccessorUint16(
       out[i] = view.getUint16(offset, true);
     } else if (accessor.componentType === GL_UNSIGNED_INT) {
       out[i] = view.getUint32(offset, true);
+    } else {
+      throw new Error(`Unsupported index component type: ${accessor.componentType}`);
     }
   }
 
   return out;
+}
+
+/** @deprecated Use readAccessorIndices instead. */
+export function readAccessorUint16(
+  json: GltfAsset,
+  buffers: ArrayBuffer[],
+  accessorIndex: number | undefined,
+): Uint16Array | Uint32Array {
+  return readAccessorIndices(json, buffers, accessorIndex);
 }
 
 // ---------------------------------------------------------------------------

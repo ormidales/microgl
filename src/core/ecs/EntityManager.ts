@@ -19,6 +19,10 @@ export class EntityManager {
 
   /** component-type → (entity → component) */
   private readonly stores: Map<string, Map<EntityId, Component>> = new Map();
+  /** query-signature → cached matching entities */
+  private readonly views: Map<string, { componentTypes: string[]; entities: Set<EntityId> }> = new Map();
+  /** component-type → query-signatures that include this component */
+  private readonly viewKeysByComponentType: Map<string, Set<string>> = new Map();
 
   // ---------------------------------------------------------------------------
   // Entity lifecycle
@@ -29,6 +33,7 @@ export class EntityManager {
     const id = this.nextId++;
     this.entities.add(id);
     this.signatures.set(id, new Set());
+    this.views.get('')?.entities.add(id);
     return id;
   }
 
@@ -43,6 +48,7 @@ export class EntityManager {
         this.stores.delete(componentType);
       }
     }
+    this.removeEntityFromViews(id);
     this.signatures.delete(id);
     this.entities.delete(id);
   }
@@ -68,7 +74,9 @@ export class EntityManager {
     }
     store.set(id, component);
 
-    this.signatures.get(id)?.add(cType);
+    const signature = this.signatures.get(id);
+    signature?.add(cType);
+    if (signature) this.updateEntityInViews(id, signature, cType);
   }
 
   /** Remove a component type from an entity. */
@@ -81,7 +89,9 @@ export class EntityManager {
       }
     }
 
-    this.signatures.get(id)?.delete(componentType);
+    const signature = this.signatures.get(id);
+    signature?.delete(componentType);
+    if (signature) this.updateEntityInViews(id, signature, componentType);
   }
 
   /** Get a component instance for an entity, or `undefined`. */
@@ -102,12 +112,48 @@ export class EntityManager {
    * Return all entity ids that possess **every** component type listed.
    */
   getEntitiesWith(...componentTypes: string[]): EntityId[] {
-    const result: EntityId[] = [];
-    for (const [id, sig] of this.signatures) {
-      if (componentTypes.every((type) => sig.has(type))) {
-        result.push(id);
+    const key = componentTypes.length === 0 ? '' : [...new Set(componentTypes)].sort().join('|');
+    let view = this.views.get(key);
+    if (!view) {
+      const normalizedTypes = key ? key.split('|') : [];
+      const entities = new Set<EntityId>();
+      for (const [id, sig] of this.signatures) {
+        if (normalizedTypes.every((type) => sig.has(type))) {
+          entities.add(id);
+        }
+      }
+      view = { componentTypes: normalizedTypes, entities };
+      this.views.set(key, view);
+      for (const type of normalizedTypes) {
+        let keys = this.viewKeysByComponentType.get(type);
+        if (!keys) {
+          keys = new Set<string>();
+          this.viewKeysByComponentType.set(type, keys);
+        }
+        keys.add(key);
       }
     }
-    return result;
+    return [...view.entities];
+  }
+
+  private updateEntityInViews(id: EntityId, signature: Set<string>, changedComponentType?: string): void {
+    const keys = changedComponentType
+      ? this.viewKeysByComponentType.get(changedComponentType) ?? new Set<string>()
+      : this.views.keys();
+    for (const key of keys) {
+      const view = this.views.get(key);
+      if (!view) continue;
+      if (view.componentTypes.every((type) => signature.has(type))) {
+        view.entities.add(id);
+      } else {
+        view.entities.delete(id);
+      }
+    }
+  }
+
+  private removeEntityFromViews(id: EntityId): void {
+    for (const view of this.views.values()) {
+      view.entities.delete(id);
+    }
   }
 }

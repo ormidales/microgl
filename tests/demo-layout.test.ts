@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const layoutSource = readFileSync(new URL('../src/demoLayout.ts', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-const cameraDemoSource = readFileSync(new URL('../src/demos/camera.ts', import.meta.url), 'utf8');
+const gltfDemoSource = readFileSync(new URL('../src/demos/gltf.ts', import.meta.url), 'utf8');
 const themeCss = readFileSync(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
 
 describe('Demo scene layout', () => {
@@ -16,17 +16,16 @@ describe('Demo scene layout', () => {
     expect(layoutSource).toContain('for (const control of controls)');
   });
 
-  it('boots the camera demo entrypoint from main', () => {
-    expect(mainSource).toContain("import { runCameraDemo } from './demos/camera'");
-    expect(mainSource).toContain('runCameraDemo()');
+  it('boots the gltf demo entrypoint from main', () => {
+    expect(mainSource).toContain("import { runGltfDemo } from './demos/gltf'");
+    expect(mainSource).toContain('runGltfDemo()');
   });
 
-  it('defines orbital camera controls and a cube grid scene for interaction', () => {
-    expect(cameraDemoSource).toContain("'Left click + drag: orbit'");
-    expect(cameraDemoSource).toContain("'Mouse wheel: zoom (radius clamped)'");
-    expect(cameraDemoSource).toContain('for (let gx = -GRID_RADIUS; gx <= GRID_RADIUS; gx++)');
-    expect(cameraDemoSource).toContain('for (let gz = -GRID_RADIUS; gz <= GRID_RADIUS; gz++)');
-    expect(cameraDemoSource).toContain('new MeshComponent(cubeVertices)');
+  it('loads a glb model asynchronously and maps primitives to mesh entities', () => {
+    expect(gltfDemoSource).toContain("const MODEL_URL = '/models/quad.glb'");
+    expect(gltfDemoSource).toContain('await fetch(MODEL_URL)');
+    expect(gltfDemoSource).toContain('await loadGltf(await response.arrayBuffer())');
+    expect(gltfDemoSource).toContain('new MeshComponent(mesh.positions, mesh.indices, mesh.normals, mesh.uvs, mesh.min, mesh.max)');
   });
 
   it('provides shared theme styles for demo layout elements', () => {

@@ -326,6 +326,17 @@ describe('Material', () => {
     expect(calls.length).toBe(1);
   });
 
+  it('caches null uniform locations', () => {
+    gl = createMockGL({ getUniformLocation: vi.fn(() => null) });
+    const mat = new Material(gl);
+    mat.setVec4('u_color', 1, 0, 0, 1);
+    mat.setVec4('u_color', 0, 1, 0, 1);
+
+    const calls = (gl.getUniformLocation as ReturnType<typeof vi.fn>).mock.calls
+      .filter((c: unknown[]) => c[1] === 'u_color');
+    expect(calls.length).toBe(1);
+  });
+
   it('dispose deletes the program', () => {
     const mat = new Material(gl);
     mat.dispose();

@@ -85,6 +85,36 @@ describe('EntityManager', () => {
     expect(transforms).not.toContain(c);
   });
 
+  it('reuses cached views for equivalent component queries', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.getEntitiesWith('Transform', 'Mesh');
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    expect((em as any).views.size).toBe(1);
+  });
+
+  it('keeps cached views in sync when components change', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    em.getEntitiesWith('Transform');
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+
+    em.addComponent(id, new TransformComponent());
+    expect(em.getEntitiesWith('Transform')).toEqual([id]);
+
+    em.removeComponent(id, 'Transform');
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+
+    em.addComponent(id, new TransformComponent());
+    em.destroyEntity(id);
+    expect(em.getEntitiesWith('Transform')).toEqual([]);
+  });
+
   it('ignores addComponent on non-existent entity', () => {
     const em = new EntityManager();
     em.addComponent(999, new TransformComponent());

@@ -91,8 +91,8 @@ export class OrbitalCameraSystem extends System {
 
   update(em: EntityManager, _deltaTime: number): void {
     const entities = em.getEntitiesWith(...this.requiredComponents);
-    const canvasWidth = this.canvas?.clientWidth ?? 0;
-    const canvasHeight = this.canvas?.clientHeight ?? 0;
+    const canvasWidth = this.canvas?.width ?? 0;
+    const canvasHeight = this.canvas?.height ?? 0;
     const canvasSizeChanged =
       canvasWidth !== this.lastCanvasWidth || canvasHeight !== this.lastCanvasHeight;
     const hasInputDelta = this.deltaTheta !== 0 || this.deltaPhi !== 0 || this.deltaZoom !== 0;
@@ -128,9 +128,7 @@ export class OrbitalCameraSystem extends System {
       mat4.lookAt(cam.view, this.eye, this.center, this.up);
 
       // Rebuild projection (aspect may change on resize)
-      const aspect = this.canvas
-        ? this.canvas.clientWidth / (this.canvas.clientHeight || 1)
-        : 1;
+      const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
       mat4.perspective(cam.projection, cam.fov, aspect, cam.near, cam.far);
       this.initializedCameras.add(id);
     }

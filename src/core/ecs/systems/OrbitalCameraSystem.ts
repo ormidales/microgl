@@ -39,6 +39,9 @@ export class OrbitalCameraSystem extends System {
   private deltaTheta = 0;
   private deltaPhi = 0;
   private deltaZoom = 0;
+  private lastCanvasWidth: number | null = null;
+  private lastCanvasHeight: number | null = null;
+  private readonly initializedCameras = new Set<number>();
   private readonly eye = vec3.create();
   private readonly center = vec3.create();
   private readonly up = vec3.set(vec3.create(), 0, 1, 0);
@@ -88,6 +91,11 @@ export class OrbitalCameraSystem extends System {
 
   update(em: EntityManager, _deltaTime: number): void {
     const entities = em.getEntitiesWith(...this.requiredComponents);
+    const canvasWidth = this.canvas?.clientWidth ?? 0;
+    const canvasHeight = this.canvas?.clientHeight ?? 0;
+    const canvasSizeChanged =
+      canvasWidth !== this.lastCanvasWidth || canvasHeight !== this.lastCanvasHeight;
+    const hasInputDelta = this.deltaTheta !== 0 || this.deltaPhi !== 0 || this.deltaZoom !== 0;
 
     for (const id of entities) {
       const cam = em.getComponent<CameraComponent>(id, 'Camera');
@@ -105,6 +113,10 @@ export class OrbitalCameraSystem extends System {
       // Clamp radius
       cam.radius = Math.max(this.minRadius, Math.min(this.maxRadius, cam.radius));
 
+      const shouldRebuildMatrices =
+        hasInputDelta || canvasSizeChanged || !this.initializedCameras.has(id);
+      if (!shouldRebuildMatrices) continue;
+
       // Spherical → Cartesian
       const sinPhi = Math.sin(cam.phi);
       const eyeX = cam.target[0] + cam.radius * sinPhi * Math.sin(cam.theta);
@@ -120,7 +132,11 @@ export class OrbitalCameraSystem extends System {
         ? this.canvas.clientWidth / (this.canvas.clientHeight || 1)
         : 1;
       mat4.perspective(cam.projection, cam.fov, aspect, cam.near, cam.far);
+      this.initializedCameras.add(id);
     }
+
+    this.lastCanvasWidth = canvasWidth;
+    this.lastCanvasHeight = canvasHeight;
 
     // Reset accumulated deltas after applying them
     this.deltaTheta = 0;

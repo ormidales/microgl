@@ -5,7 +5,7 @@ import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
 import { RenderSystem } from '../src/core/ecs/systems/RenderSystem';
 import { OrbitalCameraSystem } from '../src/core/ecs/systems/OrbitalCameraSystem';
-import { vec3 } from 'gl-matrix';
+import { mat4, vec3 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // EntityManager
@@ -336,6 +336,24 @@ describe('OrbitalCameraSystem', () => {
     // After update the matrices should no longer be identity
     // (phi=PI/4 means eye is above the target)
     expect(cam.view[12]).not.toBe(0); // translation component of lookAt
+  });
+
+  it('does not rebuild matrices when there is no input and canvas size is unchanged', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const sys = new OrbitalCameraSystem();
+    const lookAtSpy = vi.spyOn(mat4, 'lookAt');
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(lookAtSpy).toHaveBeenCalledTimes(1);
+    expect(perspectiveSpy).toHaveBeenCalledTimes(1);
+    lookAtSpy.mockRestore();
+    perspectiveSpy.mockRestore();
   });
 
   it('clamps phi to avoid poles', () => {

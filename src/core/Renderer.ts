@@ -24,7 +24,7 @@ export class Renderer {
     }
     this.gl = ctx;
     this.canvas.addEventListener('webglcontextlost', this.handleContextLost as EventListener);
-    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored);
+    this.canvas.addEventListener('webglcontextrestored', this.handleContextRestored as EventListener);
 
     this.resizeViewport();
 
@@ -73,7 +73,7 @@ export class Renderer {
   dispose(): void {
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);
-    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored);
+    this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored as EventListener);
     this.contextLostHandlers.clear();
     this.contextRestoredHandlers.clear();
     this.canvas.remove();
@@ -86,7 +86,8 @@ export class Renderer {
     }
   };
 
-  private readonly handleContextRestored = (): void => {
+  private readonly handleContextRestored = (event: WebGLContextEvent): void => {
+    void event;
     const ctx = this.canvas.getContext('webgl2', this.contextAttributes);
     if (!ctx) {
       throw new Error('Failed to restore WebGL 2 context.');

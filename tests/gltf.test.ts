@@ -409,6 +409,25 @@ describe('loadGltf', () => {
     }
   });
 
+  it('falls back to direct base64 decoding when fetch rejects data URI', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:application/octet-stream;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('NetworkError'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+      expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('loads a GLB file with embedded binary chunk', async () => {
     const { json, bin } = triangleAsset();
     // In GLB, the first buffer has no URI

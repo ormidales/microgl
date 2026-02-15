@@ -240,11 +240,13 @@ describe('RenderSystem', () => {
     return { use: vi.fn(), setVec4: vi.fn(), setMat4: vi.fn() };
   }
 
-  function createRenderSystemWithMocks() {
+  function createRenderSystemWithMocks(
+    onMeshBufferAllocationFailure?: (message: string) => void,
+  ) {
     const gl = createMockGL();
     const material = createMockMaterial();
     const renderer = { gl };
-    const sys = new RenderSystem(renderer as any, material as any);
+    const sys = new RenderSystem(renderer as any, material as any, onMeshBufferAllocationFailure);
     return { gl, material, sys };
   }
 
@@ -449,23 +451,22 @@ describe('RenderSystem', () => {
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
 
-  it('warns once when mesh buffer allocation fails consecutively', () => {
+  it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     em.addComponent(id, new TransformComponent());
     em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0])));
 
-    const { gl, sys } = createRenderSystemWithMocks();
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onFailure = vi.fn();
+    const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray).mockReturnValue(null);
 
     sys.update(em, 0.016);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
     sys.update(em, 0.016);
     sys.update(em, 0.016);
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    warnSpy.mockRestore();
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
   it('resets consecutive allocation failures after a successful allocation', () => {
@@ -477,8 +478,8 @@ describe('RenderSystem', () => {
     em.addComponent(id2, new TransformComponent());
     em.addComponent(id2, new MeshComponent(new Float32Array([0, 0, 0])));
 
-    const { gl, sys } = createRenderSystemWithMocks();
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onFailure = vi.fn();
+    const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray)
       .mockReturnValueOnce(null)
       .mockReturnValueOnce({} as WebGLVertexArrayObject)
@@ -487,11 +488,10 @@ describe('RenderSystem', () => {
 
     sys.update(em, 0.016);
     sys.update(em, 0.016);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
     sys.update(em, 0.016);
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    warnSpy.mockRestore();
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 });
 

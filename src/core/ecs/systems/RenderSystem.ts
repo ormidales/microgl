@@ -39,6 +39,7 @@ export class RenderSystem extends System {
   constructor(
     private readonly renderer?: Renderer,
     private readonly material?: Material,
+    private readonly onMeshBufferAllocationFailure?: (message: string) => void,
   ) {
     super();
   }
@@ -49,7 +50,7 @@ export class RenderSystem extends System {
       this.consecutiveMeshBufferAllocationFailures >= CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD
       && !this.warnedAboutMeshBufferAllocationFailure
     ) {
-      console.warn(
+      this.onMeshBufferAllocationFailure?.(
         'RenderSystem: repeated GPU mesh buffer allocation failures detected. Rendering may be degraded until WebGL context recovers.',
       );
       this.warnedAboutMeshBufferAllocationFailure = true;

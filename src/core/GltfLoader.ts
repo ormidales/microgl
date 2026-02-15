@@ -30,6 +30,7 @@ const GLB_MAGIC = 0x46546C67; // "glTF"
 const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
+const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -77,6 +78,12 @@ export function parseContainer(buffer: ArrayBuffer): {
   }
 
   // Treat the whole buffer as UTF-8 JSON
+  if (buffer.byteLength > MAX_JSON_BUFFER_BYTES) {
+    throw new Error(
+      `JSON glTF payload too large (${buffer.byteLength} bytes). ` +
+      `Maximum supported size is ${MAX_JSON_BUFFER_BYTES} bytes.`,
+    );
+  }
   const text = UTF8_DECODER.decode(buffer);
   const json = JSON.parse(text) as GltfAsset;
   return { json, binChunk: undefined };

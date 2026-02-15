@@ -168,7 +168,7 @@ describe('Renderer', () => {
     expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
   });
 
-  it('unobserves canvas and clears resize observer on dispose', () => {
+  it('unobserves canvas and disconnects observer only once on repeated dispose', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
@@ -180,9 +180,10 @@ describe('Renderer', () => {
     const renderer = new Renderer(container);
 
     renderer.dispose();
+    renderer.dispose();
 
     expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledWith(canvas);
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
-    expect((renderer as unknown as { resizeObserver: ResizeObserver | null }).resizeObserver).toBeNull();
+    expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledTimes(1);
   });
 });

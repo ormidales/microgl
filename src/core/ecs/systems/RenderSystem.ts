@@ -15,9 +15,15 @@ export class RenderSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
   private readonly identity = mat4.create();
   private readonly model = mat4.create();
-  private meshBuffers = new WeakMap<
+  private meshBuffers = new Map<
     MeshComponent,
-    { vao: WebGLVertexArrayObject; vertexCount: number; indexCount: number }
+    {
+      vao: WebGLVertexArrayObject;
+      vbo: WebGLBuffer;
+      ebo: WebGLBuffer | null;
+      vertexCount: number;
+      indexCount: number;
+    }
   >();
 
   constructor(
@@ -30,7 +36,13 @@ export class RenderSystem extends System {
   private ensureMeshBuffers(
     gl: WebGL2RenderingContext,
     mesh: MeshComponent,
-  ): { vao: WebGLVertexArrayObject; vertexCount: number; indexCount: number } | null {
+  ): {
+    vao: WebGLVertexArrayObject;
+    vbo: WebGLBuffer;
+    ebo: WebGLBuffer | null;
+    vertexCount: number;
+    indexCount: number;
+  } | null {
     const cached = this.meshBuffers.get(mesh);
     if (cached) return cached;
 
@@ -48,8 +60,9 @@ export class RenderSystem extends System {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
+    let ebo: WebGLBuffer | null = null;
     if (mesh.indices.length > 0) {
-      const ebo = gl.createBuffer();
+      ebo = gl.createBuffer();
       if (!ebo) {
         gl.bindVertexArray(null);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
@@ -67,11 +80,22 @@ export class RenderSystem extends System {
 
     const buffers = {
       vao,
+      vbo,
+      ebo,
       vertexCount: Math.floor(mesh.vertices.length / 3),
       indexCount: mesh.indices.length,
     };
     this.meshBuffers.set(mesh, buffers);
     return buffers;
+  }
+
+  private releaseMeshBuffers(gl: WebGL2RenderingContext, mesh: MeshComponent): void {
+    const buffers = this.meshBuffers.get(mesh);
+    if (!buffers) return;
+    if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
+    gl.deleteBuffer(buffers.vbo);
+    gl.deleteVertexArray(buffers.vao);
+    this.meshBuffers.delete(mesh);
   }
 
   update(em: EntityManager, _deltaTime: number): void {
@@ -83,6 +107,7 @@ export class RenderSystem extends System {
       ? em.getComponent<CameraComponent>(cameraEntity, 'Camera')
       : undefined;
     const entities = em.getEntitiesWith(...this.requiredComponents);
+    const activeMeshes = new Set<MeshComponent>();
 
     this.material.use();
     this.material.setVec4('u_color', 1, 1, 1, 1);
@@ -93,6 +118,7 @@ export class RenderSystem extends System {
       const transform = em.getComponent<TransformComponent>(id, 'Transform');
       const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
       if (!transform || !mesh || mesh.vertices.length === 0) continue;
+      activeMeshes.add(mesh);
 
       mat4.identity(this.model);
       mat4.translate(this.model, this.model, [transform.x, transform.y, transform.z]);
@@ -113,10 +139,22 @@ export class RenderSystem extends System {
       }
       gl.bindVertexArray(null);
     }
+
+    for (const [mesh] of this.meshBuffers) {
+      if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
+    }
   }
 
   /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
   resetGpuResources(): void {
-    this.meshBuffers = new WeakMap();
+    const gl = this.renderer?.gl;
+    if (gl) {
+      for (const buffers of this.meshBuffers.values()) {
+        if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
+        gl.deleteBuffer(buffers.vbo);
+        gl.deleteVertexArray(buffers.vao);
+      }
+    }
+    this.meshBuffers = new Map();
   }
 }

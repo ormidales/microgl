@@ -45,11 +45,13 @@ describe('Time', () => {
   it('requires explicit timestamps for pause and resume', () => {
     const time = new Time();
 
-    if (false) {
+    const assertNowMsRequired = () => {
       // @ts-expect-error nowMs is required
       time.pause();
       // @ts-expect-error nowMs is required
       time.resume();
-    }
+    };
+
+    expect(assertNowMsRequired).toBeTypeOf('function');
   });
 });

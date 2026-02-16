@@ -383,15 +383,6 @@ export function readAccessorIndices(
   return out;
 }
 
-/** @deprecated Use readAccessorIndices instead. */
-export function readAccessorUint16(
-  json: GltfAsset,
-  buffers: ArrayBuffer[],
-  accessorIndex: number | undefined,
-): Uint16Array | Uint32Array {
-  return readAccessorIndices(json, buffers, accessorIndex);
-}
-
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

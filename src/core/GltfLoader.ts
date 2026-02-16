@@ -74,10 +74,6 @@ export async function loadGltf(
  * Determine whether the buffer is a GLB container or plain JSON, then
  * extract the glTF asset descriptor and an optional binary chunk.
  */
-export function parseContainer(buffer: ArrayBuffer): {
-  json: GltfAsset;
-  binChunk: ArrayBuffer | undefined;
-};
 export function parseContainer(
   buffer: ArrayBuffer,
   options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes'>,

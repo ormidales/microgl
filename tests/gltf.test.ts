@@ -143,6 +143,8 @@ describe('GltfPrimitive typing', () => {
       ],
     };
 
+    expect(asset.meshes?.[0].primitives[0].attributes.TEXCOORD_1).toBe(1);
+    expect(asset.meshes?.[0].primitives[0].attributes.COLOR_0).toBe(2);
     expect(asset.meshes?.[0].primitives[0].attributes.JOINTS_0).toBe(3);
     expect(asset.meshes?.[0].primitives[0].attributes.WEIGHTS_0).toBe(4);
   });

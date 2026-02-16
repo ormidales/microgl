@@ -9,7 +9,10 @@ describe('Vite config', () => {
     expect(typeof external).toBe('function');
     expect(external?.('gl-matrix')).toBe(true);
     expect(external?.('gl-matrix/vec3')).toBe(true);
+    expect(external?.('/repo/node_modules/gl-matrix/esm/index.js')).toBe(true);
+    expect(external?.('C:\\repo\\node_modules\\gl-matrix\\esm\\index.js')).toBe(true);
     expect(external?.('gl-matrix-fork')).toBeFalsy();
+    expect(external?.('/repo/node_modules/my-gl-matrix/index.js')).toBeFalsy();
     expect(external?.('my-gl-matrix')).toBeFalsy();
     expect(external?.('other-lib')).toBeFalsy();
   });

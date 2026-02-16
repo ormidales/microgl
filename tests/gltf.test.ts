@@ -5,6 +5,7 @@ import {
   readAccessorFloat,
   readAccessorIndices,
 } from '../src/core/GltfLoader';
+import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset } from '../src/core/GltfTypes';
 import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
@@ -295,6 +296,12 @@ describe('readAccessorFloat', () => {
 // ---------------------------------------------------------------------------
 // readAccessorIndices
 // ---------------------------------------------------------------------------
+
+describe('GltfLoader module exports', () => {
+  it('does not expose deprecated readAccessorUint16 export', () => {
+    expect('readAccessorUint16' in GltfLoaderModule).toBe(false);
+  });
+});
 
 describe('readAccessorIndices', () => {
   it('reads SCALAR unsigned short index accessor', () => {

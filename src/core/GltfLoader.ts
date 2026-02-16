@@ -32,6 +32,11 @@ const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
+export interface GltfLoaderOptions {
+  resolveUri?: (uri: string) => Promise<ArrayBuffer>;
+  maxJsonBufferBytes?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -42,17 +47,19 @@ const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
  * (works in browsers, workers, and test environments).
  *
  * @param buffer The raw bytes of a `.gltf` (JSON) or `.glb` file.
- * @param resolveUri Optional callback to resolve external buffer URIs.
- *                   Receives the URI string and must return the buffer data.
+ * @param options Optional glTF loader configuration.
+ * @param options.resolveUri Optional callback to resolve external buffer URIs.
+ *                           Receives the URI string and must return the buffer data.
+ * @param options.maxJsonBufferBytes Optional max size accepted for plain JSON glTF payloads.
  * @returns Parsed geometry data ready for GPU upload.
  */
 export async function loadGltf(
   buffer: ArrayBuffer,
-  resolveUri?: (uri: string) => Promise<ArrayBuffer>,
+  options: GltfLoaderOptions = {},
 ): Promise<GltfLoadResult> {
-  const { json, binChunk } = parseContainer(buffer);
+  const { json, binChunk } = parseContainer(buffer, options);
 
-  const buffers = await resolveBuffers(json, binChunk, resolveUri);
+  const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
 
   const meshes = extractMeshes(json, buffers);
 
@@ -70,18 +77,26 @@ export async function loadGltf(
 export function parseContainer(buffer: ArrayBuffer): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
+};
+export function parseContainer(
+  buffer: ArrayBuffer,
+  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes'>,
+): {
+  json: GltfAsset;
+  binChunk: ArrayBuffer | undefined;
 } {
   const header = new DataView(buffer);
+  const maxJsonBufferBytes = options?.maxJsonBufferBytes ?? MAX_JSON_BUFFER_BYTES;
 
   if (buffer.byteLength >= 12 && header.getUint32(0, true) === GLB_MAGIC) {
     return parseGlb(buffer);
   }
 
   // Treat the whole buffer as UTF-8 JSON
-  if (buffer.byteLength > MAX_JSON_BUFFER_BYTES) {
+  if (buffer.byteLength > maxJsonBufferBytes) {
     throw new Error(
       `JSON glTF payload too large (${buffer.byteLength} bytes). ` +
-      `Maximum supported size is ${MAX_JSON_BUFFER_BYTES} bytes.`,
+      `Maximum supported size is ${maxJsonBufferBytes} bytes.`,
     );
   }
   const text = UTF8_DECODER.decode(buffer);

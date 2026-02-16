@@ -8,6 +8,7 @@ export {
   DEFAULT_FRAGMENT_SOURCE,
 } from './Material';
 export { loadGltf, parseContainer } from './GltfLoader';
+export type { GltfLoaderOptions } from './GltfLoader';
 export type {
   GltfAsset,
   GltfNode,

@@ -458,8 +458,18 @@ describe('loadGltf', () => {
       return bin;
     };
 
-    const result = await loadGltf(buffer, resolveUri);
+    const result = await loadGltf(buffer, { resolveUri });
     expect(result.meshes).toHaveLength(1);
+  });
+
+  it('allows overriding JSON payload size limit via options', async () => {
+    const buffer = jsonToBuffer(minimalGltf());
+
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: 1 })).rejects.toThrow(/payload too large/);
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength })).resolves.toMatchObject({
+      meshes: [],
+      nodes: [],
+    });
   });
 
   it('throws when external URI has no resolver', async () => {

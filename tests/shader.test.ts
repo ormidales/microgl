@@ -196,6 +196,12 @@ describe('ShaderCache', () => {
     expect(gl.createProgram).toHaveBeenCalledTimes(1);
   });
 
+  it('does not collide default keys when shader sources include separator characters', () => {
+    cache.getProgram('a', 'b\0c');
+    cache.getProgram('a\0b', 'c');
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+  });
+
   it('supports a custom cache key for getShader', () => {
     const s1 = cache.getShader(gl.VERTEX_SHADER, 'source', 'my-key');
     const s2 = cache.getShader(gl.VERTEX_SHADER, 'source', 'my-key');

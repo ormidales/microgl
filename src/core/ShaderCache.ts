@@ -6,6 +6,15 @@
 import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
+  private static fnv1a(value: string): string {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < value.length; i++) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return `fnv1a-${(hash >>> 0).toString(16)}`;
+  }
+
   /** key → compiled WebGLShader */
   private readonly shaders: Map<string, WebGLShader> = new Map();
 
@@ -52,7 +61,11 @@ export class ShaderCache {
    * @param key Optional cache key. Defaults to a hash of both sources.
    */
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
-    const cacheKey = key ?? `${vertexSource}\0${fragmentSource}`;
+    const cacheKey =
+      key ??
+      ShaderCache.fnv1a(
+        `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`,
+      );
     const existing = this.programs.get(cacheKey);
     if (existing) return existing;
 

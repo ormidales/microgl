@@ -489,6 +489,24 @@ describe('loadGltf', () => {
     }
   });
 
+  it('keeps original fetch error context when fallback base64 decoding also fails', async () => {
+    const { json } = triangleAsset();
+    const uri = 'data:application/octet-stream;base64,@@@';
+    json.buffers = [{ uri, byteLength: 1 }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('CSP blocked data URI'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      await expect(loadGltf(buffer)).rejects.toMatchObject({
+        message: expect.stringContaining('Initial fetch failure: CSP blocked data URI'),
+        cause: expect.objectContaining({ message: 'CSP blocked data URI' }),
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('loads a GLB file with embedded binary chunk', async () => {
     const { json, bin } = triangleAsset();
     // In GLB, the first buffer has no URI

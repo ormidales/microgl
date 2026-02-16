@@ -205,14 +205,24 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   }
   const header = uri.slice(0, commaIndex).toLowerCase();
   if (!header.includes(';base64')) {
-    throw new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
+    const error = new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
+    if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
+    throw error;
   }
-  const binary = atob(uri.slice(commaIndex + 1));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  try {
+    const binary = atob(uri.slice(commaIndex + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (error) {
+    const decodeFailure = error instanceof Error ? error : new Error('invalid base64 payload');
+    const fetchMessage = fetchFailure ? ` Initial fetch failure: ${fetchFailure.message}.` : '';
+    const decodeError = new Error(`Failed to decode base64 data URI via fallback: ${decodeFailure.message}.${fetchMessage}`);
+    if (fetchFailure) (decodeError as Error & { cause?: Error }).cause = fetchFailure;
+    throw decodeError;
   }
-  return bytes.buffer;
 }
 
 // ---------------------------------------------------------------------------

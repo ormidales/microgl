@@ -97,6 +97,18 @@ describe('EntityManager', () => {
     expect((em as any).views.size).toBe(1);
   });
 
+  it('reuses cached views when query contains duplicate component types', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.getEntitiesWith('Transform', 'Mesh');
+    expect(em.getEntitiesWith('Transform', 'Mesh', 'Transform')).toEqual([id]);
+
+    expect((em as any).views.size).toBe(1);
+  });
+
   it('keeps cached views in sync when components change', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -113,6 +125,34 @@ describe('EntityManager', () => {
     em.addComponent(id, new TransformComponent());
     em.destroyEntity(id);
     expect(em.getEntitiesWith('Transform')).toEqual([]);
+  });
+
+  it('removes empty cached views and indexes when an entity is destroyed', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    em.destroyEntity(id);
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
+  });
+
+  it('removes empty cached views and indexes when components no longer match', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    em.removeComponent(id, 'Mesh');
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
   });
 
   it('ignores addComponent on non-existent entity', () => {
@@ -166,6 +206,16 @@ describe('MeshComponent', () => {
     expect(m.type).toBe('Mesh');
     expect(m.vertices.length).toBe(0);
   });
+
+  it('reuses shared empty typed arrays for defaults', () => {
+    const a = new MeshComponent();
+    const b = new MeshComponent();
+
+    expect(a.vertices).toBe(b.vertices);
+    expect(a.indices).toBe(b.indices);
+    expect(a.normals).toBe(b.normals);
+    expect(a.uvs).toBe(b.uvs);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -200,11 +250,13 @@ describe('RenderSystem', () => {
     return { use: vi.fn(), setVec4: vi.fn(), setMat4: vi.fn() };
   }
 
-  function createRenderSystemWithMocks() {
+  function createRenderSystemWithMocks(
+    onMeshBufferAllocationFailure?: (message: string) => void,
+  ) {
     const gl = createMockGL();
     const material = createMockMaterial();
     const renderer = { gl };
-    const sys = new RenderSystem(renderer as any, material as any);
+    const sys = new RenderSystem(renderer as any, material as any, onMeshBufferAllocationFailure);
     return { gl, material, sys };
   }
 
@@ -270,6 +322,44 @@ describe('RenderSystem', () => {
     for (let i = 0; i < expectedModel.length; i++) {
       expect(modelMatrix?.[i]).toBeCloseTo(expectedModel[i], 6);
     }
+  });
+
+  it('does not recompute model matrix for unchanged transforms', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent(1, 2, 3, 0.1, 0.2, 0.3, 2, 2, 2));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const fromRotationTranslationScaleSpy = vi.spyOn(mat4, 'fromRotationTranslationScale');
+    const { sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(fromRotationTranslationScaleSpy).toHaveBeenCalledTimes(1);
+    fromRotationTranslationScaleSpy.mockRestore();
+  });
+
+  it('recomputes model matrix when transform changes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const transform = new TransformComponent();
+    em.addComponent(id, transform);
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const fromRotationTranslationScaleSpy = vi.spyOn(mat4, 'fromRotationTranslationScale');
+    const { sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+    transform.x = 1;
+    sys.update(em, 0.016);
+
+    expect(fromRotationTranslationScaleSpy).toHaveBeenCalledTimes(2);
+    fromRotationTranslationScaleSpy.mockRestore();
   });
 
   it('issues drawElements for indexed meshes', () => {
@@ -409,23 +499,22 @@ describe('RenderSystem', () => {
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
 
-  it('warns once when mesh buffer allocation fails consecutively', () => {
+  it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     em.addComponent(id, new TransformComponent());
     em.addComponent(id, new MeshComponent(new Float32Array([0, 0, 0])));
 
-    const { gl, sys } = createRenderSystemWithMocks();
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onFailure = vi.fn();
+    const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray).mockReturnValue(null);
 
     sys.update(em, 0.016);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
     sys.update(em, 0.016);
     sys.update(em, 0.016);
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    warnSpy.mockRestore();
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
   it('resets consecutive allocation failures after a successful allocation', () => {
@@ -437,8 +526,8 @@ describe('RenderSystem', () => {
     em.addComponent(id2, new TransformComponent());
     em.addComponent(id2, new MeshComponent(new Float32Array([0, 0, 0])));
 
-    const { gl, sys } = createRenderSystemWithMocks();
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onFailure = vi.fn();
+    const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray)
       .mockReturnValueOnce(null)
       .mockReturnValueOnce({} as WebGLVertexArrayObject)
@@ -447,11 +536,10 @@ describe('RenderSystem', () => {
 
     sys.update(em, 0.016);
     sys.update(em, 0.016);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(onFailure).not.toHaveBeenCalled();
     sys.update(em, 0.016);
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    warnSpy.mockRestore();
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -677,18 +765,48 @@ describe('OrbitalCameraSystem', () => {
     });
   });
 
-  it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
+  it('attaches touchstart and touchend listeners with passive true options', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+
+    const touchStartHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchstart',
+    )?.[1];
+    const touchEndHandler = (canvas.addEventListener as any).mock.calls.find(
+      (call: unknown[]) => call[0] === 'touchend',
+    )?.[1];
+
+    expect(canvas.addEventListener).toHaveBeenCalledWith('touchstart', touchStartHandler, {
+      passive: true,
+    });
+    expect(canvas.addEventListener).toHaveBeenCalledWith('touchend', touchEndHandler, {
+      passive: true,
+    });
+  });
+
+  it('normalizes wheel zoom across delta modes using runtime line/page sizes', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
     em.addComponent(id, cam);
 
+    const getComputedStyle = vi
+      .fn()
+      .mockReturnValue({ lineHeight: '24px', fontSize: '16px' } as CSSStyleDeclaration);
+    const defaultView = { getComputedStyle, innerHeight: 900 } as unknown as Window;
+    const ownerDocument = { defaultView, documentElement: {} as Element } as Document;
     const listeners = new Map<string, EventListener>();
     const canvas = {
-      width: 100,
-      height: 100,
-      clientWidth: 100,
-      clientHeight: 100,
+      width: 960,
+      height: 960,
+      clientWidth: 960,
+      clientHeight: 960,
+      ownerDocument,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
         listeners.set(type, handler);
       }),
@@ -704,26 +822,22 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
-    wheel?.({ deltaY: 120, deltaMode: 0, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 48, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterPixelStep = cam.radius;
+    const pixelStep = cam.radius - startRadius;
 
-    wheel?.({ deltaY: 1, deltaMode: 0, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 2, deltaMode: 1, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterSmallPixelStep = cam.radius;
+    const lineStep = cam.radius - startRadius - pixelStep;
 
-    wheel?.({ deltaY: 7.5, deltaMode: 1, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 0.05, deltaMode: 2, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterLineStep = cam.radius;
+    const pageStep = cam.radius - startRadius - pixelStep - lineStep;
 
-    wheel?.({ deltaY: 1.2, deltaMode: 2, preventDefault } as unknown as Event);
-    sys.update(em, 0.016);
-    const radiusAfterPageStep = cam.radius;
-
-    expect(preventDefault).toHaveBeenCalledTimes(4);
-    expect(radiusAfterPixelStep - startRadius).toBeCloseTo(0.01);
-    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 6);
-    expect(radiusAfterLineStep - radiusAfterSmallPixelStep).toBeCloseTo(0.01);
-    expect(radiusAfterPageStep - radiusAfterLineStep).toBeCloseTo(0.01);
+    expect(preventDefault).toHaveBeenCalledTimes(3);
+    expect(getComputedStyle).toHaveBeenCalledTimes(1);
+    expect(pixelStep).toBeCloseTo(lineStep);
+    expect(lineStep).toBeCloseTo(pageStep);
+    expect(pixelStep).toBeCloseTo(0.0005);
   });
 });

@@ -5,6 +5,7 @@ import {
   readAccessorFloat,
   readAccessorIndices,
 } from '../src/core/GltfLoader';
+import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset } from '../src/core/GltfTypes';
 import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
@@ -120,6 +121,34 @@ function triangleAsset(): { json: GltfAsset; bin: ArrayBuffer } {
 
   return { json, bin };
 }
+
+describe('GltfPrimitive typing', () => {
+  it('supports standard glTF 2.0 attribute semantics', () => {
+    const asset: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [
+        {
+          primitives: [
+            {
+              attributes: {
+                POSITION: 0,
+                TEXCOORD_1: 1,
+                COLOR_0: 2,
+                JOINTS_0: 3,
+                WEIGHTS_0: 4,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(asset.meshes?.[0].primitives[0].attributes.TEXCOORD_1).toBe(1);
+    expect(asset.meshes?.[0].primitives[0].attributes.COLOR_0).toBe(2);
+    expect(asset.meshes?.[0].primitives[0].attributes.JOINTS_0).toBe(3);
+    expect(asset.meshes?.[0].primitives[0].attributes.WEIGHTS_0).toBe(4);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // parseContainer
@@ -290,11 +319,30 @@ describe('readAccessorFloat', () => {
 
     expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
+
+  it('throws for sparse float accessor', () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 1, type: 'SCALAR', sparse: {} },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+      buffers: [{ byteLength: 4 }],
+    };
+
+    expect(() => readAccessorFloat(json, [new ArrayBuffer(4)], 0)).toThrow(/Sparse accessor 0 is not supported/);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // readAccessorIndices
 // ---------------------------------------------------------------------------
+
+describe('GltfLoader module exports', () => {
+  it('does not expose deprecated readAccessorUint16 export', () => {
+    expect('readAccessorUint16' in GltfLoaderModule).toBe(false);
+  });
+});
 
 describe('readAccessorIndices', () => {
   it('reads SCALAR unsigned short index accessor', () => {
@@ -362,6 +410,19 @@ describe('readAccessorIndices', () => {
 
     expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
+
+  it('throws for sparse index accessor', () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_SHORT, count: 1, type: 'SCALAR', sparse: {} },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 2 }],
+      buffers: [{ byteLength: 2 }],
+    };
+
+    expect(() => readAccessorIndices(json, [new ArrayBuffer(2)], 0)).toThrow(/Sparse accessor 0 is not supported/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -428,6 +489,24 @@ describe('loadGltf', () => {
     }
   });
 
+  it('keeps original fetch error context when fallback base64 decoding also fails', async () => {
+    const { json } = triangleAsset();
+    const uri = 'data:application/octet-stream;base64,@@@';
+    json.buffers = [{ uri, byteLength: 1 }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('CSP blocked data URI'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      await expect(loadGltf(buffer)).rejects.toMatchObject({
+        message: expect.stringContaining('Initial fetch failure: CSP blocked data URI'),
+        cause: expect.objectContaining({ message: 'CSP blocked data URI' }),
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('loads a GLB file with embedded binary chunk', async () => {
     const { json, bin } = triangleAsset();
     // In GLB, the first buffer has no URI
@@ -451,8 +530,18 @@ describe('loadGltf', () => {
       return bin;
     };
 
-    const result = await loadGltf(buffer, resolveUri);
+    const result = await loadGltf(buffer, { resolveUri });
     expect(result.meshes).toHaveLength(1);
+  });
+
+  it('allows overriding JSON payload size limit via options', async () => {
+    const buffer = jsonToBuffer(minimalGltf());
+
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: 1 })).rejects.toThrow(/payload too large/);
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength })).resolves.toMatchObject({
+      meshes: [],
+      nodes: [],
+    });
   });
 
   it('throws when external URI has no resolver', async () => {

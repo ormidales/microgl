@@ -32,6 +32,11 @@ const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
+export interface GltfLoaderOptions {
+  resolveUri?: (uri: string) => Promise<ArrayBuffer>;
+  maxJsonBufferBytes?: number;
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -42,17 +47,19 @@ const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
  * (works in browsers, workers, and test environments).
  *
  * @param buffer The raw bytes of a `.gltf` (JSON) or `.glb` file.
- * @param resolveUri Optional callback to resolve external buffer URIs.
- *                   Receives the URI string and must return the buffer data.
+ * @param options Optional glTF loader configuration.
+ * @param options.resolveUri Optional callback to resolve external buffer URIs.
+ *                           Receives the URI string and must return the buffer data.
+ * @param options.maxJsonBufferBytes Optional max size accepted for plain JSON glTF payloads.
  * @returns Parsed geometry data ready for GPU upload.
  */
 export async function loadGltf(
   buffer: ArrayBuffer,
-  resolveUri?: (uri: string) => Promise<ArrayBuffer>,
+  options: GltfLoaderOptions = {},
 ): Promise<GltfLoadResult> {
-  const { json, binChunk } = parseContainer(buffer);
+  const { json, binChunk } = parseContainer(buffer, options);
 
-  const buffers = await resolveBuffers(json, binChunk, resolveUri);
+  const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
 
   const meshes = extractMeshes(json, buffers);
 
@@ -67,21 +74,25 @@ export async function loadGltf(
  * Determine whether the buffer is a GLB container or plain JSON, then
  * extract the glTF asset descriptor and an optional binary chunk.
  */
-export function parseContainer(buffer: ArrayBuffer): {
+export function parseContainer(
+  buffer: ArrayBuffer,
+  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes'>,
+): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
 } {
   const header = new DataView(buffer);
+  const maxJsonBufferBytes = options?.maxJsonBufferBytes ?? MAX_JSON_BUFFER_BYTES;
 
   if (buffer.byteLength >= 12 && header.getUint32(0, true) === GLB_MAGIC) {
     return parseGlb(buffer);
   }
 
   // Treat the whole buffer as UTF-8 JSON
-  if (buffer.byteLength > MAX_JSON_BUFFER_BYTES) {
+  if (buffer.byteLength > maxJsonBufferBytes) {
     throw new Error(
       `JSON glTF payload too large (${buffer.byteLength} bytes). ` +
-      `Maximum supported size is ${MAX_JSON_BUFFER_BYTES} bytes.`,
+      `Maximum supported size is ${maxJsonBufferBytes} bytes.`,
     );
   }
   const text = UTF8_DECODER.decode(buffer);
@@ -194,14 +205,24 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   }
   const header = uri.slice(0, commaIndex).toLowerCase();
   if (!header.includes(';base64')) {
-    throw new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
+    const error = new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
+    if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
+    throw error;
   }
-  const binary = atob(uri.slice(commaIndex + 1));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  try {
+    const binary = atob(uri.slice(commaIndex + 1));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  } catch (error) {
+    const decodeFailure = error instanceof Error ? error : new Error('invalid base64 payload');
+    const fetchMessage = fetchFailure ? ` Initial fetch failure: ${fetchFailure.message}.` : '';
+    const decodeError = new Error(`Failed to decode base64 data URI via fallback: ${decodeFailure.message}.${fetchMessage}`);
+    if (fetchFailure) (decodeError as Error & { cause?: Error }).cause = fetchFailure;
+    throw decodeError;
   }
-  return bytes.buffer;
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +319,9 @@ export function readAccessorFloat(
   if (accessorIndex === undefined) return new Float32Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
+  if (accessor.sparse) {
+    throw new Error(`Sparse accessor ${accessorIndex} is not supported.`);
+  }
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
   const componentCount = accessor.count * componentCountForType(accessor.type);
   const { elementSize, componentOffsets } = getAccessorElementLayout(accessor.componentType, accessor.type);
@@ -342,6 +366,9 @@ export function readAccessorIndices(
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
+  if (accessor.sparse) {
+    throw new Error(`Sparse accessor ${accessorIndex} is not supported.`);
+  }
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
 
   const count = accessor.count;
@@ -381,15 +408,6 @@ export function readAccessorIndices(
   }
 
   return out;
-}
-
-/** @deprecated Use readAccessorIndices instead. */
-export function readAccessorUint16(
-  json: GltfAsset,
-  buffers: ArrayBuffer[],
-  accessorIndex: number | undefined,
-): Uint16Array | Uint32Array {
-  return readAccessorIndices(json, buffers, accessorIndex);
 }
 
 // ---------------------------------------------------------------------------

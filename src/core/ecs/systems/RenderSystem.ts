@@ -18,7 +18,6 @@ export class RenderSystem extends System {
   private consecutiveMeshBufferAllocationFailures = 0;
   private warnedAboutMeshBufferAllocationFailure = false;
   private readonly identity = mat4.create();
-  private readonly model = mat4.create();
   private readonly rotation = quat.create();
   private readonly translation = vec3.create();
   private readonly scale = vec3.fromValues(1, 1, 1);
@@ -39,6 +38,7 @@ export class RenderSystem extends System {
   constructor(
     private readonly renderer?: Renderer,
     private readonly material?: Material,
+    private readonly onMeshBufferAllocationFailure?: (message: string) => void,
   ) {
     super();
   }
@@ -49,7 +49,7 @@ export class RenderSystem extends System {
       this.consecutiveMeshBufferAllocationFailures >= CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD
       && !this.warnedAboutMeshBufferAllocationFailure
     ) {
-      console.warn(
+      this.onMeshBufferAllocationFailure?.(
         'RenderSystem: repeated GPU mesh buffer allocation failures detected. Rendering may be degraded until WebGL context recovers.',
       );
       this.warnedAboutMeshBufferAllocationFailure = true;
@@ -189,14 +189,22 @@ export class RenderSystem extends System {
       if (!transform || !mesh || mesh.vertices.length === 0) continue;
       activeMeshes.add(mesh);
 
-      vec3.set(this.translation, transform.x, transform.y, transform.z);
-      vec3.set(this.scale, transform.scaleX, transform.scaleY, transform.scaleZ);
-      quat.identity(this.rotation);
-      quat.rotateX(this.rotation, this.rotation, transform.rotationX);
-      quat.rotateY(this.rotation, this.rotation, transform.rotationY);
-      quat.rotateZ(this.rotation, this.rotation, transform.rotationZ);
-      mat4.fromRotationTranslationScale(this.model, this.rotation, this.translation, this.scale);
-      this.material.setMat4('u_model', this.model);
+      if (transform.needsModelMatrixUpdate()) {
+        vec3.set(this.translation, transform.x, transform.y, transform.z);
+        vec3.set(this.scale, transform.scaleX, transform.scaleY, transform.scaleZ);
+        quat.identity(this.rotation);
+        quat.rotateX(this.rotation, this.rotation, transform.rotationX);
+        quat.rotateY(this.rotation, this.rotation, transform.rotationY);
+        quat.rotateZ(this.rotation, this.rotation, transform.rotationZ);
+        mat4.fromRotationTranslationScale(
+          transform.modelMatrix,
+          this.rotation,
+          this.translation,
+          this.scale,
+        );
+        transform.markModelMatrixClean();
+      }
+      this.material.setMat4('u_model', transform.modelMatrix);
 
       const buffers = this.ensureMeshBuffers(gl, mesh);
       if (!buffers) continue;

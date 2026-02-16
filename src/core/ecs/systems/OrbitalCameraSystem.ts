@@ -12,9 +12,8 @@ import type { CameraComponent } from '../components/CameraComponent';
  * and zoom (scroll wheel).
  */
 export class OrbitalCameraSystem extends System {
-  private static readonly WHEEL_LINE_HEIGHT = 16;
-  private static readonly WHEEL_PAGE_HEIGHT = 800;
-  private static readonly WHEEL_DELTA_NORMALIZER = 120;
+  private static readonly DOM_DELTA_LINE = typeof WheelEvent === 'undefined' ? 1 : WheelEvent.DOM_DELTA_LINE;
+  private static readonly DOM_DELTA_PAGE = typeof WheelEvent === 'undefined' ? 2 : WheelEvent.DOM_DELTA_PAGE;
   private static readonly NON_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
     passive: false,
   };
@@ -224,13 +223,37 @@ export class OrbitalCameraSystem extends System {
 
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
-    let deltaY = e.deltaY;
-    if (e.deltaMode === 1) {
-      deltaY *= OrbitalCameraSystem.WHEEL_LINE_HEIGHT;
-    } else if (e.deltaMode === 2) {
-      deltaY *= this.canvas?.height ?? OrbitalCameraSystem.WHEEL_PAGE_HEIGHT;
-    }
+    const deltaPixels = this.normalizeWheelDeltaYToPixels(e.deltaY, e.deltaMode);
+    this.deltaZoom += (deltaPixels / this.getWheelPageHeight()) * this.zoomSensitivity;
+  }
 
-    this.deltaZoom += (deltaY / OrbitalCameraSystem.WHEEL_DELTA_NORMALIZER) * this.zoomSensitivity;
+  private normalizeWheelDeltaYToPixels(deltaY: number, deltaMode: number): number {
+    if (deltaMode === OrbitalCameraSystem.DOM_DELTA_LINE) {
+      return deltaY * this.getWheelLineHeight();
+    }
+    if (deltaMode === OrbitalCameraSystem.DOM_DELTA_PAGE) {
+      return deltaY * this.getWheelPageHeight();
+    }
+    return deltaY;
+  }
+
+  private getWheelLineHeight(): number {
+    const canvas = this.canvas;
+    const view = canvas?.ownerDocument?.defaultView;
+    if (!view || !canvas) return 1;
+    const style = view.getComputedStyle(canvas);
+    const lineHeight = Number.parseFloat(style.lineHeight);
+    if (Number.isFinite(lineHeight) && lineHeight > 0) return lineHeight;
+    const fontSize = Number.parseFloat(style.fontSize);
+    if (Number.isFinite(fontSize) && fontSize > 0) return fontSize;
+    return 1;
+  }
+
+  private getWheelPageHeight(): number {
+    const canvasHeight = this.canvas?.clientHeight ?? this.canvas?.height;
+    if (typeof canvasHeight === 'number' && canvasHeight > 0) return canvasHeight;
+    const windowHeight = this.canvas?.ownerDocument?.defaultView?.innerHeight;
+    if (typeof windowHeight === 'number' && windowHeight > 0) return windowHeight;
+    return 1;
   }
 }

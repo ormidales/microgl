@@ -741,18 +741,24 @@ describe('OrbitalCameraSystem', () => {
     });
   });
 
-  it('normalizes wheel zoom across delta modes while preserving magnitude', () => {
+  it('normalizes wheel zoom across delta modes using runtime line/page sizes', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
     em.addComponent(id, cam);
 
+    const getComputedStyle = vi
+      .fn()
+      .mockReturnValue({ lineHeight: '24px', fontSize: '16px' } as CSSStyleDeclaration);
+    const defaultView = { getComputedStyle, innerHeight: 900 } as unknown as Window;
+    const ownerDocument = { defaultView, documentElement: {} as Element } as Document;
     const listeners = new Map<string, EventListener>();
     const canvas = {
-      width: 100,
-      height: 100,
-      clientWidth: 100,
-      clientHeight: 100,
+      width: 960,
+      height: 960,
+      clientWidth: 960,
+      clientHeight: 960,
+      ownerDocument,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
         listeners.set(type, handler);
       }),
@@ -768,26 +774,22 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
-    wheel?.({ deltaY: 120, deltaMode: 0, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 48, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterPixelStep = cam.radius;
+    const pixelStep = cam.radius - startRadius;
 
-    wheel?.({ deltaY: 1, deltaMode: 0, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 2, deltaMode: 1, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterSmallPixelStep = cam.radius;
+    const lineStep = cam.radius - startRadius - pixelStep;
 
-    wheel?.({ deltaY: 7.5, deltaMode: 1, preventDefault } as unknown as Event);
+    wheel?.({ deltaY: 0.05, deltaMode: 2, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
-    const radiusAfterLineStep = cam.radius;
+    const pageStep = cam.radius - startRadius - pixelStep - lineStep;
 
-    wheel?.({ deltaY: 1.2, deltaMode: 2, preventDefault } as unknown as Event);
-    sys.update(em, 0.016);
-    const radiusAfterPageStep = cam.radius;
-
-    expect(preventDefault).toHaveBeenCalledTimes(4);
-    expect(radiusAfterPixelStep - startRadius).toBeCloseTo(0.01);
-    expect(radiusAfterSmallPixelStep - radiusAfterPixelStep).toBeCloseTo(0.0000833333, 6);
-    expect(radiusAfterLineStep - radiusAfterSmallPixelStep).toBeCloseTo(0.01);
-    expect(radiusAfterPageStep - radiusAfterLineStep).toBeCloseTo(0.01);
+    expect(preventDefault).toHaveBeenCalledTimes(3);
+    expect(getComputedStyle).toHaveBeenCalledTimes(1);
+    expect(pixelStep).toBeCloseTo(lineStep);
+    expect(lineStep).toBeCloseTo(pageStep);
+    expect(pixelStep).toBeCloseTo(0.0005);
   });
 });

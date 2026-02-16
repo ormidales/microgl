@@ -297,11 +297,13 @@ describe('readAccessorFloat', () => {
 // readAccessorIndices
 // ---------------------------------------------------------------------------
 
-describe('readAccessorIndices', () => {
+describe('GltfLoader module exports', () => {
   it('does not expose deprecated readAccessorUint16 export', () => {
     expect('readAccessorUint16' in GltfLoaderModule).toBe(false);
   });
+});
 
+describe('readAccessorIndices', () => {
   it('reads SCALAR unsigned short index accessor', () => {
     const { json, bin } = triangleAsset();
     const buffers = [bin];

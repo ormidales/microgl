@@ -6,11 +6,14 @@
 import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
+  private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;
+  private static readonly FNV1A_PRIME = 0x01000193;
+
   private static fnv1a(value: string): string {
-    let hash = 0x811c9dc5;
+    let hash = ShaderCache.FNV1A_OFFSET_BASIS;
     for (let i = 0; i < value.length; i++) {
       hash ^= value.charCodeAt(i);
-      hash = Math.imul(hash, 0x01000193);
+      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
     }
     return `fnv1a-${(hash >>> 0).toString(16)}`;
   }

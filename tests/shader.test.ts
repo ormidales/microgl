@@ -199,6 +199,8 @@ describe('ShaderCache', () => {
   it('does not collide default keys when shader sources include separator characters', () => {
     cache.getProgram('a', 'b\0c');
     cache.getProgram('a\0b', 'c');
+    cache.getProgram('a', 'b\0c');
+    cache.getProgram('a\0b', 'c');
     expect(gl.createProgram).toHaveBeenCalledTimes(2);
   });
 

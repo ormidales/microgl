@@ -238,11 +238,10 @@ export class OrbitalCameraSystem extends System {
   }
 
   private getWheelLineHeight(): number {
-    const view = this.canvas?.ownerDocument?.defaultView;
-    if (!view) return 1;
-    const element = this.canvas;
-    if (!element) return 1;
-    const style = view.getComputedStyle(element);
+    const canvas = this.canvas;
+    const view = canvas?.ownerDocument?.defaultView;
+    if (!view || !canvas) return 1;
+    const style = view.getComputedStyle(canvas);
     const lineHeight = Number.parseFloat(style.lineHeight);
     if (Number.isFinite(lineHeight) && lineHeight > 0) return lineHeight;
     const fontSize = Number.parseFloat(style.fontSize);

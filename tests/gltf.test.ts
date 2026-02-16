@@ -122,6 +122,32 @@ function triangleAsset(): { json: GltfAsset; bin: ArrayBuffer } {
   return { json, bin };
 }
 
+describe('GltfPrimitive typing', () => {
+  it('supports standard glTF 2.0 attribute semantics', () => {
+    const asset: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [
+        {
+          primitives: [
+            {
+              attributes: {
+                POSITION: 0,
+                TEXCOORD_1: 1,
+                COLOR_0: 2,
+                JOINTS_0: 3,
+                WEIGHTS_0: 4,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(asset.meshes?.[0].primitives[0].attributes.JOINTS_0).toBe(3);
+    expect(asset.meshes?.[0].primitives[0].attributes.WEIGHTS_0).toBe(4);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // parseContainer
 // ---------------------------------------------------------------------------

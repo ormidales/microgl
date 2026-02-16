@@ -47,8 +47,18 @@ export interface GltfMesh {
   primitives: GltfPrimitive[];
 }
 
+export type GltfPrimitiveAttributeSemantic =
+  | 'POSITION'
+  | 'NORMAL'
+  | 'TANGENT'
+  | `TEXCOORD_${number}`
+  | `COLOR_${number}`
+  | `JOINTS_${number}`
+  | `WEIGHTS_${number}`
+  | `_${string}`;
+
 export interface GltfPrimitive {
-  attributes: Record<string, number>;
+  attributes: Partial<Record<GltfPrimitiveAttributeSemantic, number>>;
   indices?: number;
   mode?: number;
   material?: number;

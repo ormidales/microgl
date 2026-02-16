@@ -11,7 +11,7 @@ export default defineConfig({
         demos: fileURLToPath(new URL('./demos.html', import.meta.url)),
         demo: fileURLToPath(new URL('./demo.html', import.meta.url)),
       },
-      external: (id: string) => id === 'gl-matrix' || id.startsWith('gl-matrix/'),
+      external: (id: string) => /(?:^|[/\\])gl-matrix(?:$|[/\\])/.test(id),
     },
   },
 });

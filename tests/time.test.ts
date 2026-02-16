@@ -22,6 +22,14 @@ describe('Time', () => {
     expect(time.deltaTime).toBe(0.1);
   });
 
+  it('supports configuring the delta time cap', () => {
+    const time = new Time(0.2);
+    time.update(1000);
+    time.update(11000);
+
+    expect(time.deltaTime).toBe(0.2);
+  });
+
   it('does not include paused duration in delta time after resume', () => {
     const time = new Time();
     time.update(1000);

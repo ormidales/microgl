@@ -2,7 +2,7 @@
  * Tracks elapsed time and per-frame delta time.
  */
 export class Time {
-  private static readonly MAX_DELTA_TIME_SECONDS = 0.1;
+  private static readonly DEFAULT_MAX_DELTA_TIME_SECONDS = 0.1;
 
   /** Seconds elapsed since the last frame. */
   public deltaTime: number = 0;
@@ -10,8 +10,13 @@ export class Time {
   /** Total seconds elapsed since the loop started. */
   public elapsed: number = 0;
 
+  private readonly maxDeltaTimeSeconds: number;
   private last: number = 0;
   private pausedAt: number | null = null;
+
+  constructor(maxDeltaTimeSeconds = Time.DEFAULT_MAX_DELTA_TIME_SECONDS) {
+    this.maxDeltaTimeSeconds = maxDeltaTimeSeconds;
+  }
 
   /** Call once at the start of each frame with the rAF timestamp (ms). */
   update(nowMs: number): void {
@@ -20,7 +25,7 @@ export class Time {
     }
     this.deltaTime = Math.min(
       (nowMs - this.last) / 1000,
-      Time.MAX_DELTA_TIME_SECONDS,
+      this.maxDeltaTimeSeconds,
     );
     this.elapsed += this.deltaTime;
     this.last = nowMs;

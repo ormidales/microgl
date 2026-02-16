@@ -314,6 +314,44 @@ describe('RenderSystem', () => {
     }
   });
 
+  it('does not recompute model matrix for unchanged transforms', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent(1, 2, 3, 0.1, 0.2, 0.3, 2, 2, 2));
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const fromRotationTranslationScaleSpy = vi.spyOn(mat4, 'fromRotationTranslationScale');
+    const { sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+    sys.update(em, 0.016);
+
+    expect(fromRotationTranslationScaleSpy).toHaveBeenCalledTimes(1);
+    fromRotationTranslationScaleSpy.mockRestore();
+  });
+
+  it('recomputes model matrix when transform changes', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const transform = new TransformComponent();
+    em.addComponent(id, transform);
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const fromRotationTranslationScaleSpy = vi.spyOn(mat4, 'fromRotationTranslationScale');
+    const { sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+    transform.x = 1;
+    sys.update(em, 0.016);
+
+    expect(fromRotationTranslationScaleSpy).toHaveBeenCalledTimes(2);
+    fromRotationTranslationScaleSpy.mockRestore();
+  });
+
   it('issues drawElements for indexed meshes', () => {
     const em = new EntityManager();
     const id = em.createEntity();

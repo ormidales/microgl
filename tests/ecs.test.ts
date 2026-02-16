@@ -206,6 +206,16 @@ describe('MeshComponent', () => {
     expect(m.type).toBe('Mesh');
     expect(m.vertices.length).toBe(0);
   });
+
+  it('reuses shared empty typed arrays for defaults', () => {
+    const a = new MeshComponent();
+    const b = new MeshComponent();
+
+    expect(a.vertices).toBe(b.vertices);
+    expect(a.indices).toBe(b.indices);
+    expect(a.normals).toBe(b.normals);
+    expect(a.uvs).toBe(b.uvs);
+  });
 });
 
 // ---------------------------------------------------------------------------

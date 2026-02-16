@@ -64,6 +64,7 @@ export interface GltfAccessor {
   componentType: number;
   count: number;
   type: string;
+  sparse?: unknown;
   max?: number[];
   min?: number[];
 }

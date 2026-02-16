@@ -7,15 +7,16 @@ import { mat4 } from 'gl-matrix';
 export class TransformComponent implements Component {
   public readonly type = 'Transform';
   public readonly modelMatrix = mat4.create();
-  private lastX = Number.NaN;
-  private lastY = Number.NaN;
-  private lastZ = Number.NaN;
-  private lastRotationX = Number.NaN;
-  private lastRotationY = Number.NaN;
-  private lastRotationZ = Number.NaN;
-  private lastScaleX = Number.NaN;
-  private lastScaleY = Number.NaN;
-  private lastScaleZ = Number.NaN;
+  private dirty = true;
+  private lastX = 0;
+  private lastY = 0;
+  private lastZ = 0;
+  private lastRotationX = 0;
+  private lastRotationY = 0;
+  private lastRotationZ = 0;
+  private lastScaleX = 1;
+  private lastScaleY = 1;
+  private lastScaleZ = 1;
 
   constructor(
     public x: number = 0,
@@ -30,7 +31,8 @@ export class TransformComponent implements Component {
   ) {}
 
   needsModelMatrixUpdate(): boolean {
-    return this.x !== this.lastX
+    return this.dirty
+      || this.x !== this.lastX
       || this.y !== this.lastY
       || this.z !== this.lastZ
       || this.rotationX !== this.lastRotationX
@@ -51,5 +53,6 @@ export class TransformComponent implements Component {
     this.lastScaleX = this.scaleX;
     this.lastScaleY = this.scaleY;
     this.lastScaleZ = this.scaleZ;
+    this.dirty = false;
   }
 }

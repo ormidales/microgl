@@ -291,6 +291,19 @@ describe('readAccessorFloat', () => {
 
     expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
+
+  it('throws for sparse float accessor', () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 1, type: 'SCALAR', sparse: {} },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+      buffers: [{ byteLength: 4 }],
+    };
+
+    expect(() => readAccessorFloat(json, [new ArrayBuffer(4)], 0)).toThrow(/Sparse accessor 0 is not supported/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -368,6 +381,19 @@ describe('readAccessorIndices', () => {
     };
 
     expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
+
+  it('throws for sparse index accessor', () => {
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_SHORT, count: 1, type: 'SCALAR', sparse: {} },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 2 }],
+      buffers: [{ byteLength: 2 }],
+    };
+
+    expect(() => readAccessorIndices(json, [new ArrayBuffer(2)], 0)).toThrow(/Sparse accessor 0 is not supported/);
   });
 });
 

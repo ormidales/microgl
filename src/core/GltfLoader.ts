@@ -309,6 +309,9 @@ export function readAccessorFloat(
   if (accessorIndex === undefined) return new Float32Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
+  if (accessor.sparse) {
+    throw new Error(`Sparse accessor ${accessorIndex} is not supported.`);
+  }
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
   const componentCount = accessor.count * componentCountForType(accessor.type);
   const { elementSize, componentOffsets } = getAccessorElementLayout(accessor.componentType, accessor.type);
@@ -353,6 +356,9 @@ export function readAccessorIndices(
   if (accessorIndex === undefined) return new Uint16Array(0);
 
   const accessor = getAccessor(json, accessorIndex);
+  if (accessor.sparse) {
+    throw new Error(`Sparse accessor ${accessorIndex} is not supported.`);
+  }
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
 
   const count = accessor.count;

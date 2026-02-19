@@ -507,6 +507,48 @@ describe('loadGltf', () => {
     }
   });
 
+  it('decodes data URI buffer without MIME type (data:;base64,...)', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: vi.fn().mockResolvedValue(bin),
+    } as Response);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+      expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('falls back to direct base64 decoding for data URI without MIME type when fetch fails', async () => {
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    const uri = `data:;base64,${base64}`;
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('NetworkError'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(result.meshes).toHaveLength(1);
+      expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('loads a GLB file with embedded binary chunk', async () => {
     const { json, bin } = triangleAsset();
     // In GLB, the first buffer has no URI

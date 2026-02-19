@@ -734,6 +734,25 @@ describe('loadGltf', () => {
     expect(result.meshes[0].min).toEqual([0, 0, 0]);
     expect(result.meshes[0].max).toEqual([1, 1, 0]);
   });
+
+  it('throws when position accessor has fewer than 3 components', async () => {
+    // SCALAR accessor with count=2 yields a Float32Array of length 2 (<3 components).
+    const positionData = new Float32Array([1, 2]);
+    const bin = positionData.buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'Bad', primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 2, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: bin.byteLength }],
+      buffers: [{ byteLength: bin.byteLength }],
+    };
+
+    const glb = buildGlb(json, bin);
+    await expect(loadGltf(glb)).rejects.toThrow(/Invalid position data/);
+  });
 });
 
 // ---------------------------------------------------------------------------

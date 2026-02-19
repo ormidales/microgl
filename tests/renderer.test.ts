@@ -168,6 +168,21 @@ describe('Renderer', () => {
     expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
   });
 
+  it('sets resizeObserver to null after dispose to allow garbage collection', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+    renderer.dispose();
+
+    expect((renderer as unknown as Record<string, unknown>).resizeObserver).toBeNull();
+  });
+
   it('unobserves canvas and disconnects observer only once on repeated dispose', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);

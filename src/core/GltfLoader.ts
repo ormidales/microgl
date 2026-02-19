@@ -277,7 +277,9 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
 
 function computePositionBounds(positions: Float32Array): { min: number[]; max: number[] } {
   if (positions.length < 3) {
-    return { min: [], max: [] };
+    throw new Error(
+      `Invalid position data: expected at least 3 components (one XYZ vertex), got ${positions.length}.`,
+    );
   }
 
   let minX = positions[0];

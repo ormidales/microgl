@@ -12,6 +12,8 @@ export class Time {
 
   private readonly maxDeltaTimeSeconds: number;
   private last: number = 0;
+  private origin: number = 0;
+  private totalPausedMs: number = 0;
   private pausedAt: number | null = null;
 
   constructor(maxDeltaTimeSeconds = Time.DEFAULT_MAX_DELTA_TIME_SECONDS) {
@@ -22,12 +24,13 @@ export class Time {
   update(nowMs: number): void {
     if (this.last === 0) {
       this.last = nowMs;
+      this.origin = nowMs;
     }
     this.deltaTime = Math.min(
       (nowMs - this.last) / 1000,
       this.maxDeltaTimeSeconds,
     );
-    this.elapsed += this.deltaTime;
+    this.elapsed = (nowMs - this.origin - this.totalPausedMs) / 1000;
     this.last = nowMs;
   }
 
@@ -41,8 +44,12 @@ export class Time {
   /** Resume elapsed time accumulation after a pause. */
   resume(nowMs: number): void {
     if (this.pausedAt !== null) {
+      const pauseDuration = Math.max(0, nowMs - this.pausedAt);
+      if (this.origin !== 0) {
+        this.totalPausedMs += pauseDuration;
+      }
       if (this.last !== 0) {
-        this.last += Math.max(0, nowMs - this.pausedAt);
+        this.last += pauseDuration;
       }
       this.pausedAt = null;
     }
@@ -53,6 +60,8 @@ export class Time {
     this.deltaTime = 0;
     this.elapsed = 0;
     this.last = 0;
+    this.origin = 0;
+    this.totalPausedMs = 0;
     this.pausedAt = null;
   }
 }

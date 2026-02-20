@@ -12,6 +12,7 @@ import type { EntityId, Component } from './types';
  */
 export class EntityManager {
   private nextId: EntityId = 0;
+  private readonly freeIds: EntityId[] = [];
   private readonly entities: Set<EntityId> = new Set();
 
   /** entity → set of attached component types */
@@ -30,7 +31,7 @@ export class EntityManager {
 
   /** Create a new entity and return its id. */
   createEntity(): EntityId {
-    const id = this.nextId++;
+    const id = this.freeIds.length > 0 ? this.freeIds.pop()! : this.nextId++;
     this.entities.add(id);
     this.signatures.set(id, new Set());
     this.views.get('')?.entities.add(id);
@@ -57,6 +58,7 @@ export class EntityManager {
     this.removeEntityFromViews(id);
     this.signatures.delete(id);
     this.entities.delete(id);
+    this.freeIds.push(id);
   }
 
   /** Return `true` if the entity exists. */

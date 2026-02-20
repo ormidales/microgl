@@ -12,7 +12,7 @@ export class MeshComponent implements Component {
 
   constructor(
     public vertices: Float32Array = MeshComponent.EMPTY_FLOAT32,
-    public indices: Uint16Array | Uint32Array = MeshComponent.EMPTY_UINT16,
+    public indices: Uint8Array | Uint16Array | Uint32Array = MeshComponent.EMPTY_UINT16,
     public normals: Float32Array = MeshComponent.EMPTY_FLOAT32,
     public uvs: Float32Array = MeshComponent.EMPTY_FLOAT32,
     public min: number[] = [],

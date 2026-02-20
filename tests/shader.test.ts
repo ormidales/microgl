@@ -382,9 +382,8 @@ describe('Material', () => {
     expect(restoredGl.useProgram).toHaveBeenCalledWith(mat.program);
   });
 
-  it('restore keeps previous context when restore fails', () => {
+  it('restore keeps previous context and nulls program when restore fails', () => {
     const mat = new Material(gl);
-    const initialProgram = mat.program;
     const failingGl = createMockGL({
       getProgramParameter: vi.fn(() => false),
       getProgramInfoLog: vi.fn(() => 'link failed'),
@@ -392,8 +391,30 @@ describe('Material', () => {
 
     expect(() => mat.restore(failingGl)).toThrow(/Failed to link shader program/);
 
-    mat.use();
-    expect(gl.useProgram).toHaveBeenCalledWith(initialProgram);
+    expect(mat.program).toBeNull();
+    mat.use(); // must be a no-op
+    expect(gl.useProgram).not.toHaveBeenCalled();
+    expect(failingGl.useProgram).not.toHaveBeenCalled();
+  });
+
+  it('restore nulls program when same-context restore fails', () => {
+    const failingGl = createMockGL({
+      getProgramParameter: vi.fn(() => false),
+      getProgramInfoLog: vi.fn(() => 'link failed'),
+    });
+    // First call succeeds (initial construction) - subsequent calls fail
+    let callCount = 0;
+    (failingGl.getProgramParameter as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      return callCount++ === 0;
+    });
+
+    const mat = new Material(failingGl);
+    expect(mat.program).toBeDefined();
+
+    expect(() => mat.restore()).toThrow(/Failed to link shader program/);
+
+    expect(mat.program).toBeNull();
+    mat.use(); // must be a no-op
     expect(failingGl.useProgram).not.toHaveBeenCalled();
   });
 });

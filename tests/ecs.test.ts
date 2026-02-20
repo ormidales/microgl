@@ -230,6 +230,40 @@ describe('EntityManager', () => {
 
     expect(em.getEntitiesWith('Component0', 'Component31')).toEqual([id]);
   });
+
+  it('reuses destroyed entity ids instead of allocating new ones', () => {
+    const em = new EntityManager();
+    const a = em.createEntity(); // id 0
+    const b = em.createEntity(); // id 1
+    em.destroyEntity(a);
+    const c = em.createEntity(); // should reuse id 0
+    expect(c).toBe(a);
+    expect(em.hasEntity(b)).toBe(true);
+    expect(em.hasEntity(c)).toBe(true);
+  });
+
+  it('reused ids start with an empty signature and no stale components', () => {
+    const em = new EntityManager();
+    const a = em.createEntity();
+    em.addComponent(a, new TransformComponent(1, 2, 3));
+    em.destroyEntity(a);
+
+    const b = em.createEntity(); // reuses a's id
+    expect(b).toBe(a);
+    expect(em.hasComponent(b, 'Transform')).toBe(false);
+    em.addComponent(b, new TransformComponent(7, 8, 9));
+    expect(em.getComponent<TransformComponent>(b, 'Transform')?.x).toBe(7);
+  });
+
+  it('does not exceed nextId when ids are continuously recycled', () => {
+    const em = new EntityManager();
+    const id = em.createEntity(); // nextId becomes 1
+    for (let i = 0; i < 1000; i++) {
+      em.destroyEntity(id);
+      em.createEntity(); // reuses id, nextId stays 1
+    }
+    expect((em as any).nextId).toBe(1);
+  });
 });
 
 // ---------------------------------------------------------------------------

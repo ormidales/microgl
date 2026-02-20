@@ -537,6 +537,47 @@ describe('loadGltf', () => {
     }
   });
 
+  it('attaches original fetch error as cause when fetch throws and data URI is not base64', async () => {
+    const { json } = triangleAsset();
+    // Plain (URL-encoded) data URI — no ;base64 in header
+    const uri = 'data:application/octet-stream,some-data';
+    json.buffers = [{ uri, byteLength: 1 }];
+
+    const networkError = new Error('CORS policy blocked request');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(networkError);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      await expect(loadGltf(buffer)).rejects.toMatchObject({
+        message: expect.stringContaining('CORS policy blocked request'),
+        cause: expect.objectContaining({ message: 'CORS policy blocked request' }),
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('attaches fetch status as cause when fetch returns non-OK and base64 decoding also fails', async () => {
+    const { json } = triangleAsset();
+    const uri = 'data:application/octet-stream;base64,@@@';
+    json.buffers = [{ uri, byteLength: 1 }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+    } as Response);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      await expect(loadGltf(buffer)).rejects.toMatchObject({
+        message: expect.stringContaining('Initial fetch failure: status 403'),
+        cause: expect.objectContaining({ message: 'status 403' }),
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('decodes data URI buffer without MIME type (data:;base64,...)', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));

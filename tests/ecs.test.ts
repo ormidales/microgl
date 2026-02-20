@@ -155,6 +155,28 @@ describe('EntityManager', () => {
     expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
   });
 
+  it('purges viewKeysByComponentType deterministically after 1000 add/remove cycles', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    for (let i = 0; i < 1000; i++) {
+      em.removeComponent(id, 'Mesh');
+      em.addComponent(id, new MeshComponent());
+    }
+
+    // After all cycles the last removeComponent left the view empty; the view
+    // and both index entries must be fully cleaned up.
+    em.removeComponent(id, 'Mesh');
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.size).toBe(0);
+  });
+
   it('ignores addComponent on non-existent entity', () => {
     const em = new EntityManager();
     em.addComponent(999, new TransformComponent());

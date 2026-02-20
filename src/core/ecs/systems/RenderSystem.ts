@@ -230,6 +230,24 @@ export class RenderSystem extends System {
     }
   }
 
+  /**
+   * Releases GPU buffers for mesh components that are no longer attached to any active entity.
+   * Can be called outside the `update` loop to reclaim GPU memory immediately after
+   * destroying mesh entities when the animation loop is paused.
+   */
+  flushStaleMeshBuffers(em: EntityManager): void {
+    const gl = this.renderer?.gl;
+    if (!gl || this.meshBuffers.size === 0) return;
+    const activeMeshes = new Set<MeshComponent>();
+    for (const id of em.getEntitiesWith(...this.requiredComponents)) {
+      const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
+      if (mesh) activeMeshes.add(mesh);
+    }
+    for (const [mesh] of this.meshBuffers) {
+      if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
+    }
+  }
+
   /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
   resetGpuResources(): void {
     const gl = this.renderer?.gl;

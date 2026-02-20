@@ -256,6 +256,32 @@ describe('ShaderCache', () => {
     expect(gl.deleteProgram).not.toHaveBeenCalled();
     expect(gl.deleteShader).not.toHaveBeenCalled();
   });
+
+  it('returns distinct programs when two source pairs produce the same FNV-1a hash (collision)', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    // Simulate a hash collision by forcing fnv1a to always return the same key.
+    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+      'collision-key',
+    );
+
+    const p1 = cache.getProgram('vert-a', 'frag-a');
+    const p2 = cache.getProgram('vert-b', 'frag-b'); // same hash, different sources
+
+    // Same sources must return the already-cached program.
+    const p3 = cache.getProgram('vert-a', 'frag-a');
+    const p4 = cache.getProgram('vert-b', 'frag-b');
+
+    expect(p1).not.toBe(p2);
+    expect(p1).toBe(p3);
+    expect(p2).toBe(p4);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+
+    vi.restoreAllMocks();
+  });
 });
 
 // ---------------------------------------------------------------------------

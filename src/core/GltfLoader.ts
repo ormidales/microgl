@@ -326,7 +326,14 @@ export function readAccessorFloat(
   }
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
   const componentCount = accessor.count * componentCountForType(accessor.type);
-  const { elementSize, componentOffsets } = getAccessorElementLayout(accessor.componentType, accessor.type);
+  let elementLayout: { elementSize: number; componentOffsets: number[] };
+  try {
+    elementLayout = getAccessorElementLayout(accessor.componentType, accessor.type);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Accessor ${accessorIndex}: ${msg}`);
+  }
+  const { elementSize, componentOffsets } = elementLayout;
 
   // Fast path: tightly packed floats – just wrap
   const expectedStride = elementSize;
@@ -349,7 +356,7 @@ export function readAccessorFloat(
   for (let i = 0; i < accessor.count; i++) {
     const base = byteOffset + i * stride;
     for (let c = 0; c < elemSize; c++) {
-      out[outIdx++] = readComponent(view, base + componentOffsets[c], accessor.componentType);
+      out[outIdx++] = readComponent(view, base + componentOffsets[c], accessor.componentType, accessorIndex);
     }
   }
 
@@ -374,7 +381,13 @@ export function readAccessorIndices(
   const { data, byteOffset, byteStride, byteLength } = getBufferSlice(json, buffers, accessor);
 
   const count = accessor.count;
-  const bpc = bytesPerComponent(accessor.componentType);
+  let bpc: number;
+  try {
+    bpc = bytesPerComponent(accessor.componentType);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Accessor ${accessorIndex}: ${msg}`);
+  }
   const stride = byteStride || bpc;
   const requiredBytes = count === 0 ? 0 : (count - 1) * stride + bpc;
   if (requiredBytes > byteLength) {
@@ -405,7 +418,7 @@ export function readAccessorIndices(
     } else if (accessor.componentType === GL_UNSIGNED_INT) {
       out[i] = view.getUint32(offset, true);
     } else {
-      throw new Error(`Unsupported index component type: ${accessor.componentType}`);
+      throw new Error(`Accessor ${accessorIndex}: unsupported glTF component type ${accessor.componentType}.`);
     }
   }
 
@@ -445,7 +458,7 @@ function getBufferSlice(
   return { data, byteOffset, byteStride, byteLength };
 }
 
-function readComponent(view: DataView, offset: number, componentType: number): number {
+function readComponent(view: DataView, offset: number, componentType: number, accessorIndex: number): number {
   switch (componentType) {
     case GL_BYTE: return view.getInt8(offset);
     case GL_UNSIGNED_BYTE: return view.getUint8(offset);
@@ -453,7 +466,7 @@ function readComponent(view: DataView, offset: number, componentType: number): n
     case GL_UNSIGNED_SHORT: return view.getUint16(offset, true);
     case GL_UNSIGNED_INT: return view.getUint32(offset, true);
     case GL_FLOAT: return view.getFloat32(offset, true);
-    default: throw new Error(`Unsupported glTF component type: ${componentType}`);
+    default: throw new Error(`Accessor ${accessorIndex}: unsupported glTF component type ${componentType}.`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
 import { TransformComponent } from '../src/core/ecs/components/TransformComponent';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
@@ -656,6 +656,13 @@ describe('CameraComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('OrbitalCameraSystem', () => {
+  beforeEach(() => {
+    (globalThis as any).window = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+  });
+  afterEach(() => {
+    delete (globalThis as any).window;
+  });
+
   it('declares required components', () => {
     const sys = new OrbitalCameraSystem();
     expect(sys.requiredComponents).toEqual(['Camera']);
@@ -796,27 +803,34 @@ describe('OrbitalCameraSystem', () => {
     cam.phi = 2;
     em.addComponent(id, cam);
 
-    const listeners = new Map<string, EventListener>();
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
     const canvas = {
       width: 100,
       height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
-        listeners.set(type, handler);
+        canvasListeners.set(type, handler);
       }),
       removeEventListener: vi.fn((type: string) => {
-        listeners.delete(type);
+        canvasListeners.delete(type);
       }),
     } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
 
     const sys = new OrbitalCameraSystem();
     sys.rotateSensitivity = 0.1;
     sys.attach(canvas);
 
-    const start = listeners.get('touchstart');
-    const move = listeners.get('touchmove');
-    const end = listeners.get('touchend');
+    const start = canvasListeners.get('touchstart');
+    const move = canvasListeners.get('touchmove');
+    const end = windowListeners.get('touchend');
     expect(start).toBeDefined();
     expect(move).toBeDefined();
     expect(end).toBeDefined();
@@ -868,22 +882,143 @@ describe('OrbitalCameraSystem', () => {
       removeEventListener: vi.fn(),
     } as unknown as HTMLCanvasElement;
 
+    const windowAddCalls: unknown[][] = [];
+    (globalThis as any).window.addEventListener = vi.fn((...args: unknown[]) => {
+      windowAddCalls.push(args);
+    });
+
     const sys = new OrbitalCameraSystem();
     sys.attach(canvas);
 
     const touchStartHandler = (canvas.addEventListener as any).mock.calls.find(
       (call: unknown[]) => call[0] === 'touchstart',
     )?.[1];
-    const touchEndHandler = (canvas.addEventListener as any).mock.calls.find(
-      (call: unknown[]) => call[0] === 'touchend',
-    )?.[1];
+    const touchEndCall = windowAddCalls.find((call) => call[0] === 'touchend');
 
     expect(canvas.addEventListener).toHaveBeenCalledWith('touchstart', touchStartHandler, {
       passive: true,
     });
-    expect(canvas.addEventListener).toHaveBeenCalledWith('touchend', touchEndHandler, {
-      passive: true,
+    expect(touchEndCall).toBeDefined();
+    expect(touchEndCall?.[2]).toEqual({ passive: true });
+  });
+
+  it('mouseup on window resets dragging state even when released outside canvas', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
+    const canvas = {
+      width: 100,
+      height: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        canvasListeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const mousedown = canvasListeners.get('mousedown');
+    const mousemove = canvasListeners.get('mousemove');
+    const mouseup = windowListeners.get('mouseup');
+    expect(mouseup).toBeDefined();
+
+    // Start drag
+    mousedown?.({ button: 0, clientX: 0, clientY: 0 } as unknown as Event);
+    // Move a bit
+    mousemove?.({ clientX: 5, clientY: 0 } as unknown as Event);
+    // Release on window (outside canvas)
+    mouseup?.({ button: 0 } as unknown as Event);
+    // Move again – should have no effect since dragging is false
+    mousemove?.({ clientX: 10, clientY: 0 } as unknown as Event);
+
+    sys.update(em, 0.016);
+    // Only the first move (5px) should have been applied
+    expect(cam.theta).toBeCloseTo(-0.5);
+  });
+
+  it('touchend on window resets dragging state even when released outside canvas', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
+    const canvas = {
+      width: 100,
+      height: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        canvasListeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const touchstart = canvasListeners.get('touchstart');
+    const touchmove = canvasListeners.get('touchmove');
+    const touchend = windowListeners.get('touchend');
+    expect(touchend).toBeDefined();
+
+    // Start drag
+    touchstart?.({ touches: [{ clientX: 0, clientY: 0 }] } as unknown as Event);
+    // Move a bit
+    const preventDefault = vi.fn();
+    touchmove?.({ touches: [{ clientX: 5, clientY: 0 }], preventDefault } as unknown as Event);
+    // Release on window (outside canvas)
+    touchend?.({} as Event);
+    // Move again – should have no effect since dragging is false
+    touchmove?.({ touches: [{ clientX: 10, clientY: 0 }], preventDefault } as unknown as Event);
+
+    sys.update(em, 0.016);
+    // Only the first move (5px) should have been applied
+    expect(cam.theta).toBeCloseTo(-0.5);
+  });
+
+  it('detaches mouseup and touchend from window on detach', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const windowAddCalls: unknown[][] = [];
+    const windowRemoveCalls: unknown[][] = [];
+    (globalThis as any).window.addEventListener = vi.fn((...args: unknown[]) => {
+      windowAddCalls.push(args);
     });
+    (globalThis as any).window.removeEventListener = vi.fn((...args: unknown[]) => {
+      windowRemoveCalls.push(args);
+    });
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+
+    const mouseupHandler = windowAddCalls.find((call) => call[0] === 'mouseup')?.[1];
+    const touchendHandler = windowAddCalls.find((call) => call[0] === 'touchend')?.[1];
+
+    expect(windowRemoveCalls).toContainEqual(['mouseup', mouseupHandler]);
+    expect(windowRemoveCalls).toContainEqual(['touchend', touchendHandler, { passive: true }]);
   });
 
   it('normalizes wheel zoom across delta modes using fixed line/page constants', () => {

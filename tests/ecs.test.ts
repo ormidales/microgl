@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
+import { System } from '../src/core/ecs/System';
 import { TransformComponent } from '../src/core/ecs/components/TransformComponent';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
@@ -263,6 +264,44 @@ describe('EntityManager', () => {
       em.createEntity(); // reuses id, nextId stays 1
     }
     expect((em as any).nextId).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// System.safeUpdate
+// ---------------------------------------------------------------------------
+
+describe('System.safeUpdate', () => {
+  it('does not rethrow errors thrown by update()', () => {
+    class FailingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { throw new Error('boom'); }
+    }
+    const em = new EntityManager();
+    expect(() => new FailingSystem().safeUpdate(em, 0.016)).not.toThrow();
+  });
+
+  it('logs the caught error via console.error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    class FailingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { throw new Error('boom'); }
+    }
+    const em = new EntityManager();
+    new FailingSystem().safeUpdate(em, 0.016);
+    expect(spy).toHaveBeenCalledOnce();
+    spy.mockRestore();
+  });
+
+  it('invokes update() normally when no error is thrown', () => {
+    let called = false;
+    class WorkingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { called = true; }
+    }
+    const em = new EntityManager();
+    new WorkingSystem().safeUpdate(em, 0.016);
+    expect(called).toBe(true);
   });
 });
 

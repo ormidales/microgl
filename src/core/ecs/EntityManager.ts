@@ -41,11 +41,17 @@ export class EntityManager {
   destroyEntity(id: EntityId): void {
     if (!this.entities.has(id)) return;
 
-    // Remove from every component store
-    for (const [componentType, store] of this.stores) {
-      store.delete(id);
-      if (store.size === 0) {
-        this.stores.delete(componentType);
+    // Remove only from stores for component types the entity actually owns
+    const signature = this.signatures.get(id);
+    if (signature) {
+      for (const componentType of signature) {
+        const store = this.stores.get(componentType);
+        if (store) {
+          store.delete(id);
+          if (store.size === 0) {
+            this.stores.delete(componentType);
+          }
+        }
       }
     }
     this.removeEntityFromViews(id);

@@ -197,6 +197,29 @@ describe('EntityManager', () => {
     expect((em as any).stores.has('Transform')).toBe(false);
   });
 
+  it('destroyEntity only touches stores for components the entity owns', () => {
+    const em = new EntityManager();
+
+    // entity A owns only Transform
+    const a = em.createEntity();
+    em.addComponent(a, new TransformComponent());
+
+    // entity B owns only Mesh – its store must survive after destroying A
+    const b = em.createEntity();
+    em.addComponent(b, new MeshComponent());
+
+    em.destroyEntity(a);
+
+    // A is gone and its store is pruned
+    expect(em.hasEntity(a)).toBe(false);
+    expect((em as any).stores.has('Transform')).toBe(false);
+
+    // B is untouched
+    expect(em.hasEntity(b)).toBe(true);
+    expect((em as any).stores.has('Mesh')).toBe(true);
+    expect(em.hasComponent(b, 'Mesh')).toBe(true);
+  });
+
   it('supports more than 31 distinct component types', () => {
     const em = new EntityManager();
     const id = em.createEntity();

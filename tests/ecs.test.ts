@@ -569,6 +569,66 @@ describe('RenderSystem', () => {
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
 
+  it('flushStaleMeshBuffers releases GPU buffers outside the update loop', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id);
+    // intentionally do NOT call sys.update – simulate a paused animation loop
+    sys.flushStaleMeshBuffers(em);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushStaleMeshBuffers is a no-op when no renderer is present', () => {
+    const em = new EntityManager();
+    const sys = new RenderSystem();
+    expect(() => sys.flushStaleMeshBuffers(em)).not.toThrow();
+  });
+
+  it('flushStaleMeshBuffers is a no-op when mesh buffers are empty', () => {
+    const em = new EntityManager();
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.flushStaleMeshBuffers(em);
+    expect(gl.deleteVertexArray).not.toHaveBeenCalled();
+    expect(gl.deleteBuffer).not.toHaveBeenCalled();
+  });
+
+  it('flushStaleMeshBuffers preserves buffers for still-active entities', () => {
+    const em = new EntityManager();
+    const id1 = em.createEntity();
+    em.addComponent(id1, new TransformComponent());
+    em.addComponent(
+      id1,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const id2 = em.createEntity();
+    em.addComponent(id2, new TransformComponent());
+    em.addComponent(
+      id2,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id1);
+    sys.flushStaleMeshBuffers(em);
+
+    // only the destroyed entity's buffers should be freed
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
   it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();

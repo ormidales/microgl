@@ -148,7 +148,11 @@ export class RenderSystem extends System {
       ebo,
       vertexCount: Math.floor(mesh.vertices.length / 3),
       indexCount: mesh.indices.length,
-      indexType: mesh.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
+      indexType: mesh.indices instanceof Uint32Array
+        ? gl.UNSIGNED_INT
+        : mesh.indices instanceof Uint8Array
+          ? gl.UNSIGNED_BYTE
+          : gl.UNSIGNED_SHORT,
     };
     this.consecutiveMeshBufferAllocationFailures = 0;
     this.warnedAboutMeshBufferAllocationFailure = false;
@@ -192,10 +196,13 @@ export class RenderSystem extends System {
       if (transform.needsModelMatrixUpdate()) {
         vec3.set(this.translation, transform.x, transform.y, transform.z);
         vec3.set(this.scale, transform.scaleX, transform.scaleY, transform.scaleZ);
-        quat.identity(this.rotation);
-        quat.rotateX(this.rotation, this.rotation, transform.rotationX);
-        quat.rotateY(this.rotation, this.rotation, transform.rotationY);
-        quat.rotateZ(this.rotation, this.rotation, transform.rotationZ);
+        quat.fromEuler(
+          this.rotation,
+          transform.rotationX * (180 / Math.PI),
+          transform.rotationY * (180 / Math.PI),
+          transform.rotationZ * (180 / Math.PI),
+          'xyz',
+        );
         mat4.fromRotationTranslationScale(
           transform.modelMatrix,
           this.rotation,
@@ -218,6 +225,24 @@ export class RenderSystem extends System {
       gl.bindVertexArray(null);
     }
 
+    for (const [mesh] of this.meshBuffers) {
+      if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
+    }
+  }
+
+  /**
+   * Releases GPU buffers for mesh components that are no longer attached to any active entity.
+   * Can be called outside the `update` loop to reclaim GPU memory immediately after
+   * destroying mesh entities when the animation loop is paused.
+   */
+  flushStaleMeshBuffers(em: EntityManager): void {
+    const gl = this.renderer?.gl;
+    if (!gl || this.meshBuffers.size === 0) return;
+    const activeMeshes = new Set<MeshComponent>();
+    for (const id of em.getEntitiesWith(...this.requiredComponents)) {
+      const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
+      if (mesh) activeMeshes.add(mesh);
+    }
     for (const [mesh] of this.meshBuffers) {
       if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
     }

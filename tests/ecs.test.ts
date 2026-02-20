@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
+import { System } from '../src/core/ecs/System';
 import { TransformComponent } from '../src/core/ecs/components/TransformComponent';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
@@ -155,6 +156,28 @@ describe('EntityManager', () => {
     expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
   });
 
+  it('purges viewKeysByComponentType deterministically after 1000 add/remove cycles', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+    em.getEntitiesWith('Mesh', 'Transform');
+
+    for (let i = 0; i < 1000; i++) {
+      em.removeComponent(id, 'Mesh');
+      em.addComponent(id, new MeshComponent());
+    }
+
+    // After all cycles the last removeComponent left the view empty; the view
+    // and both index entries must be fully cleaned up.
+    em.removeComponent(id, 'Mesh');
+
+    expect((em as any).views.has('Mesh|Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Mesh')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Transform')).toBe(false);
+    expect((em as any).viewKeysByComponentType.size).toBe(0);
+  });
+
   it('ignores addComponent on non-existent entity', () => {
     const em = new EntityManager();
     em.addComponent(999, new TransformComponent());
@@ -175,6 +198,29 @@ describe('EntityManager', () => {
     expect((em as any).stores.has('Transform')).toBe(false);
   });
 
+  it('destroyEntity only touches stores for components the entity owns', () => {
+    const em = new EntityManager();
+
+    // entity A owns only Transform
+    const a = em.createEntity();
+    em.addComponent(a, new TransformComponent());
+
+    // entity B owns only Mesh – its store must survive after destroying A
+    const b = em.createEntity();
+    em.addComponent(b, new MeshComponent());
+
+    em.destroyEntity(a);
+
+    // A is gone and its store is pruned
+    expect(em.hasEntity(a)).toBe(false);
+    expect((em as any).stores.has('Transform')).toBe(false);
+
+    // B is untouched
+    expect(em.hasEntity(b)).toBe(true);
+    expect((em as any).stores.has('Mesh')).toBe(true);
+    expect(em.hasComponent(b, 'Mesh')).toBe(true);
+  });
+
   it('supports more than 31 distinct component types', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -184,6 +230,78 @@ describe('EntityManager', () => {
     }
 
     expect(em.getEntitiesWith('Component0', 'Component31')).toEqual([id]);
+  });
+
+  it('reuses destroyed entity ids instead of allocating new ones', () => {
+    const em = new EntityManager();
+    const a = em.createEntity(); // id 0
+    const b = em.createEntity(); // id 1
+    em.destroyEntity(a);
+    const c = em.createEntity(); // should reuse id 0
+    expect(c).toBe(a);
+    expect(em.hasEntity(b)).toBe(true);
+    expect(em.hasEntity(c)).toBe(true);
+  });
+
+  it('reused ids start with an empty signature and no stale components', () => {
+    const em = new EntityManager();
+    const a = em.createEntity();
+    em.addComponent(a, new TransformComponent(1, 2, 3));
+    em.destroyEntity(a);
+
+    const b = em.createEntity(); // reuses a's id
+    expect(b).toBe(a);
+    expect(em.hasComponent(b, 'Transform')).toBe(false);
+    em.addComponent(b, new TransformComponent(7, 8, 9));
+    expect(em.getComponent<TransformComponent>(b, 'Transform')?.x).toBe(7);
+  });
+
+  it('does not exceed nextId when ids are continuously recycled', () => {
+    const em = new EntityManager();
+    const id = em.createEntity(); // nextId becomes 1
+    for (let i = 0; i < 1000; i++) {
+      em.destroyEntity(id);
+      em.createEntity(); // reuses id, nextId stays 1
+    }
+    expect((em as any).nextId).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// System.safeUpdate
+// ---------------------------------------------------------------------------
+
+describe('System.safeUpdate', () => {
+  it('does not rethrow errors thrown by update()', () => {
+    class FailingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { throw new Error('boom'); }
+    }
+    const em = new EntityManager();
+    expect(() => new FailingSystem().safeUpdate(em, 0.016)).not.toThrow();
+  });
+
+  it('logs the caught error via console.error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    class FailingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { throw new Error('boom'); }
+    }
+    const em = new EntityManager();
+    new FailingSystem().safeUpdate(em, 0.016);
+    expect(spy).toHaveBeenCalledOnce();
+    spy.mockRestore();
+  });
+
+  it('invokes update() normally when no error is thrown', () => {
+    let called = false;
+    class WorkingSystem extends System {
+      readonly requiredComponents = [] as const;
+      update(): void { called = true; }
+    }
+    const em = new EntityManager();
+    new WorkingSystem().safeUpdate(em, 0.016);
+    expect(called).toBe(true);
   });
 });
 
@@ -197,6 +315,51 @@ describe('TransformComponent', () => {
     expect(t.type).toBe('Transform');
     expect(t.x).toBe(0);
     expect(t.scaleX).toBe(1);
+  });
+
+  it('needsModelMatrixUpdate returns true initially', () => {
+    const t = new TransformComponent();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('needsModelMatrixUpdate returns false after markModelMatrixClean', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+  });
+
+  it('setDirty forces needsModelMatrixUpdate to return true even when values are unchanged', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('setDirty works after component is recycled with identical values', () => {
+    // Simulate recycling: component cleaned, then reinitialized to the same values
+    const t = new TransformComponent(5, 5, 5);
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+
+    // External script reassigns to same values – change detection would miss this
+    t.x = 5;
+    t.y = 5;
+    t.z = 5;
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+
+    // setDirty forces an update
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('markModelMatrixClean clears dirty flag set by setDirty', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
   });
 });
 
@@ -232,6 +395,7 @@ describe('RenderSystem', () => {
       TRIANGLES: 0x0004,
       UNSIGNED_SHORT: 0x1403,
       UNSIGNED_INT: 0x1405,
+      UNSIGNED_BYTE: 0x1401,
       createVertexArray: vi.fn(() => ({} as WebGLVertexArrayObject)),
       createBuffer: vi.fn(() => ({} as WebGLBuffer)),
       bindVertexArray: vi.fn(),
@@ -410,6 +574,30 @@ describe('RenderSystem', () => {
     );
   });
 
+  it('issues drawElements with UNSIGNED_BYTE for Uint8 indices', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint8Array([0, 1, 2]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.drawElements).toHaveBeenCalledWith(
+      gl.TRIANGLES,
+      3,
+      gl.UNSIGNED_BYTE,
+      0,
+    );
+  });
+
   it('binds normal and uv attributes when provided', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -495,6 +683,66 @@ describe('RenderSystem', () => {
     em.destroyEntity(id);
     sys.update(em, 0.016);
 
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushStaleMeshBuffers releases GPU buffers outside the update loop', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id);
+    // intentionally do NOT call sys.update – simulate a paused animation loop
+    sys.flushStaleMeshBuffers(em);
+
+    expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushStaleMeshBuffers is a no-op when no renderer is present', () => {
+    const em = new EntityManager();
+    const sys = new RenderSystem();
+    expect(() => sys.flushStaleMeshBuffers(em)).not.toThrow();
+  });
+
+  it('flushStaleMeshBuffers is a no-op when mesh buffers are empty', () => {
+    const em = new EntityManager();
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.flushStaleMeshBuffers(em);
+    expect(gl.deleteVertexArray).not.toHaveBeenCalled();
+    expect(gl.deleteBuffer).not.toHaveBeenCalled();
+  });
+
+  it('flushStaleMeshBuffers preserves buffers for still-active entities', () => {
+    const em = new EntityManager();
+    const id1 = em.createEntity();
+    em.addComponent(id1, new TransformComponent());
+    em.addComponent(
+      id1,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+    const id2 = em.createEntity();
+    em.addComponent(id2, new TransformComponent());
+    em.addComponent(
+      id2,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    em.destroyEntity(id1);
+    sys.flushStaleMeshBuffers(em);
+
+    // only the destroyed entity's buffers should be freed
     expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
@@ -586,6 +834,13 @@ describe('CameraComponent', () => {
 // ---------------------------------------------------------------------------
 
 describe('OrbitalCameraSystem', () => {
+  beforeEach(() => {
+    (globalThis as any).window = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+  });
+  afterEach(() => {
+    delete (globalThis as any).window;
+  });
+
   it('declares required components', () => {
     const sys = new OrbitalCameraSystem();
     expect(sys.requiredComponents).toEqual(['Camera']);
@@ -647,6 +902,33 @@ describe('OrbitalCameraSystem', () => {
     perspectiveSpy.mockRestore();
   });
 
+  it('does not rebuild projection when canvas is resized proportionally', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const canvas = {
+      width: 800,
+      height: 600,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.update(em, 0.016);
+
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+
+    // Proportional resize: same aspect ratio (4:3), different dimensions
+    (canvas as any).width = 1600;
+    (canvas as any).height = 1200;
+    sys.update(em, 0.016);
+
+    expect(perspectiveSpy).not.toHaveBeenCalled();
+    perspectiveSpy.mockRestore();
+  });
+
   it('clamps phi to avoid poles', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -699,27 +981,34 @@ describe('OrbitalCameraSystem', () => {
     cam.phi = 2;
     em.addComponent(id, cam);
 
-    const listeners = new Map<string, EventListener>();
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
     const canvas = {
       width: 100,
       height: 100,
       clientWidth: 100,
       clientHeight: 100,
       addEventListener: vi.fn((type: string, handler: EventListener) => {
-        listeners.set(type, handler);
+        canvasListeners.set(type, handler);
       }),
       removeEventListener: vi.fn((type: string) => {
-        listeners.delete(type);
+        canvasListeners.delete(type);
       }),
     } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
 
     const sys = new OrbitalCameraSystem();
     sys.rotateSensitivity = 0.1;
     sys.attach(canvas);
 
-    const start = listeners.get('touchstart');
-    const move = listeners.get('touchmove');
-    const end = listeners.get('touchend');
+    const start = canvasListeners.get('touchstart');
+    const move = canvasListeners.get('touchmove');
+    const end = windowListeners.get('touchend');
     expect(start).toBeDefined();
     expect(move).toBeDefined();
     expect(end).toBeDefined();
@@ -771,25 +1060,146 @@ describe('OrbitalCameraSystem', () => {
       removeEventListener: vi.fn(),
     } as unknown as HTMLCanvasElement;
 
+    const windowAddCalls: unknown[][] = [];
+    (globalThis as any).window.addEventListener = vi.fn((...args: unknown[]) => {
+      windowAddCalls.push(args);
+    });
+
     const sys = new OrbitalCameraSystem();
     sys.attach(canvas);
 
     const touchStartHandler = (canvas.addEventListener as any).mock.calls.find(
       (call: unknown[]) => call[0] === 'touchstart',
     )?.[1];
-    const touchEndHandler = (canvas.addEventListener as any).mock.calls.find(
-      (call: unknown[]) => call[0] === 'touchend',
-    )?.[1];
+    const touchEndCall = windowAddCalls.find((call) => call[0] === 'touchend');
 
     expect(canvas.addEventListener).toHaveBeenCalledWith('touchstart', touchStartHandler, {
       passive: true,
     });
-    expect(canvas.addEventListener).toHaveBeenCalledWith('touchend', touchEndHandler, {
-      passive: true,
-    });
+    expect(touchEndCall).toBeDefined();
+    expect(touchEndCall?.[2]).toEqual({ passive: true });
   });
 
-  it('normalizes wheel zoom across delta modes using runtime line/page sizes', () => {
+  it('mouseup on window resets dragging state even when released outside canvas', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
+    const canvas = {
+      width: 100,
+      height: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        canvasListeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const mousedown = canvasListeners.get('mousedown');
+    const mousemove = canvasListeners.get('mousemove');
+    const mouseup = windowListeners.get('mouseup');
+    expect(mouseup).toBeDefined();
+
+    // Start drag
+    mousedown?.({ button: 0, clientX: 0, clientY: 0 } as unknown as Event);
+    // Move a bit
+    mousemove?.({ clientX: 5, clientY: 0 } as unknown as Event);
+    // Release on window (outside canvas)
+    mouseup?.({ button: 0 } as unknown as Event);
+    // Move again – should have no effect since dragging is false
+    mousemove?.({ clientX: 10, clientY: 0 } as unknown as Event);
+
+    sys.update(em, 0.016);
+    // Only the first move (5px) should have been applied
+    expect(cam.theta).toBeCloseTo(-0.5);
+  });
+
+  it('touchend on window resets dragging state even when released outside canvas', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const cam = new CameraComponent();
+    em.addComponent(id, cam);
+
+    const canvasListeners = new Map<string, EventListener>();
+    const windowListeners = new Map<string, EventListener>();
+    const canvas = {
+      width: 100,
+      height: 100,
+      addEventListener: vi.fn((type: string, handler: EventListener) => {
+        canvasListeners.set(type, handler);
+      }),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+
+    const sys = new OrbitalCameraSystem();
+    sys.rotateSensitivity = 0.1;
+    sys.attach(canvas);
+
+    const touchstart = canvasListeners.get('touchstart');
+    const touchmove = canvasListeners.get('touchmove');
+    const touchend = windowListeners.get('touchend');
+    expect(touchend).toBeDefined();
+
+    // Start drag
+    touchstart?.({ touches: [{ clientX: 0, clientY: 0 }] } as unknown as Event);
+    // Move a bit
+    const preventDefault = vi.fn();
+    touchmove?.({ touches: [{ clientX: 5, clientY: 0 }], preventDefault } as unknown as Event);
+    // Release on window (outside canvas)
+    touchend?.({} as Event);
+    // Move again – should have no effect since dragging is false
+    touchmove?.({ touches: [{ clientX: 10, clientY: 0 }], preventDefault } as unknown as Event);
+
+    sys.update(em, 0.016);
+    // Only the first move (5px) should have been applied
+    expect(cam.theta).toBeCloseTo(-0.5);
+  });
+
+  it('detaches mouseup and touchend from window on detach', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const windowAddCalls: unknown[][] = [];
+    const windowRemoveCalls: unknown[][] = [];
+    (globalThis as any).window.addEventListener = vi.fn((...args: unknown[]) => {
+      windowAddCalls.push(args);
+    });
+    (globalThis as any).window.removeEventListener = vi.fn((...args: unknown[]) => {
+      windowRemoveCalls.push(args);
+    });
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+
+    const mouseupHandler = windowAddCalls.find((call) => call[0] === 'mouseup')?.[1];
+    const touchendHandler = windowAddCalls.find((call) => call[0] === 'touchend')?.[1];
+
+    expect(windowRemoveCalls).toContainEqual(['mouseup', mouseupHandler]);
+    expect(windowRemoveCalls).toContainEqual(['touchend', touchendHandler, { passive: true }]);
+  });
+
+  it('normalizes wheel zoom across delta modes using fixed line/page constants', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
@@ -822,22 +1232,26 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
+    // 48 raw pixels → (48 / 600) * 0.01
     wheel?.({ deltaY: 48, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const pixelStep = cam.radius - startRadius;
 
-    wheel?.({ deltaY: 2, deltaMode: 1, preventDefault } as unknown as Event);
+    // 3 lines × 16 px/line = 48 px → same step
+    wheel?.({ deltaY: 3, deltaMode: 1, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const lineStep = cam.radius - startRadius - pixelStep;
 
-    wheel?.({ deltaY: 0.05, deltaMode: 2, preventDefault } as unknown as Event);
+    // 0.08 pages × 600 px/page = 48 px → same step
+    wheel?.({ deltaY: 0.08, deltaMode: 2, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const pageStep = cam.radius - startRadius - pixelStep - lineStep;
 
     expect(preventDefault).toHaveBeenCalledTimes(3);
-    expect(getComputedStyle).toHaveBeenCalledTimes(1);
+    // No DOM query needed — constants are now fixed
+    expect(getComputedStyle).not.toHaveBeenCalled();
     expect(pixelStep).toBeCloseTo(lineStep);
     expect(lineStep).toBeCloseTo(pageStep);
-    expect(pixelStep).toBeCloseTo(0.0005);
+    expect(pixelStep).toBeCloseTo(0.0008);
   });
 });

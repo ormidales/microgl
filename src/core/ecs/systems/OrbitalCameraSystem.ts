@@ -14,6 +14,10 @@ import type { CameraComponent } from '../components/CameraComponent';
 export class OrbitalCameraSystem extends System {
   private static readonly DOM_DELTA_LINE = typeof WheelEvent === 'undefined' ? 1 : WheelEvent.DOM_DELTA_LINE;
   private static readonly DOM_DELTA_PAGE = typeof WheelEvent === 'undefined' ? 2 : WheelEvent.DOM_DELTA_PAGE;
+  /** Fixed pixel equivalent of one scroll line (matches the browser default font size). */
+  private static readonly WHEEL_LINE_HEIGHT_PX = 16;
+  /** Fixed pixel equivalent of one scroll page used for normalisation. */
+  private static readonly WHEEL_PAGE_HEIGHT_PX = 600;
   private static readonly NON_PASSIVE_EVENT_OPTIONS: AddEventListenerOptions = {
     passive: false,
   };
@@ -48,8 +52,7 @@ export class OrbitalCameraSystem extends System {
   private deltaTheta = 0;
   private deltaPhi = 0;
   private deltaZoom = 0;
-  private lastCanvasWidth: number | null = null;
-  private lastCanvasHeight: number | null = null;
+  private lastAspect: number | null = null;
   private readonly initializedCameras = new Set<number>();
   private readonly eye = vec3.create();
   private readonly center = vec3.create();
@@ -74,14 +77,14 @@ export class OrbitalCameraSystem extends System {
     this.canvas = canvas;
     canvas.addEventListener('mousedown', this.onMouseDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
-    canvas.addEventListener('mouseup', this.onMouseUp);
+    window.addEventListener('mouseup', this.onMouseUp);
     canvas.addEventListener('touchstart', this.onTouchStart, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener(
       'touchmove',
       this.onTouchMove,
       OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
     );
-    canvas.addEventListener('touchend', this.onTouchEnd, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
+    window.addEventListener('touchend', this.onTouchEnd, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener('wheel', this.onWheel, OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS);
   }
 
@@ -90,7 +93,7 @@ export class OrbitalCameraSystem extends System {
     if (!this.canvas) return;
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     this.canvas.removeEventListener('mousemove', this.onMouseMove);
-    this.canvas.removeEventListener('mouseup', this.onMouseUp);
+    window.removeEventListener('mouseup', this.onMouseUp);
     this.canvas.removeEventListener(
       'touchstart',
       this.onTouchStart,
@@ -101,7 +104,7 @@ export class OrbitalCameraSystem extends System {
       this.onTouchMove,
       OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
     );
-    this.canvas.removeEventListener(
+    window.removeEventListener(
       'touchend',
       this.onTouchEnd,
       OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
@@ -120,10 +123,8 @@ export class OrbitalCameraSystem extends System {
 
   update(em: EntityManager, _deltaTime: number): void {
     const entities = em.getEntitiesWith(...this.requiredComponents);
-    const canvasWidth = this.canvas?.width ?? 0;
-    const canvasHeight = this.canvas?.height ?? 0;
-    const canvasSizeChanged =
-      canvasWidth !== this.lastCanvasWidth || canvasHeight !== this.lastCanvasHeight;
+    const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
+    const aspectChanged = aspect !== this.lastAspect;
     const hasInputDelta = this.deltaTheta !== 0 || this.deltaPhi !== 0 || this.deltaZoom !== 0;
 
     for (const id of entities) {
@@ -143,7 +144,7 @@ export class OrbitalCameraSystem extends System {
       cam.radius = Math.max(this.minRadius, Math.min(this.maxRadius, cam.radius));
 
       const shouldRebuildMatrices =
-        hasInputDelta || canvasSizeChanged || !this.initializedCameras.has(id);
+        hasInputDelta || aspectChanged || !this.initializedCameras.has(id);
       if (!shouldRebuildMatrices) continue;
 
       // Spherical → Cartesian
@@ -157,13 +158,11 @@ export class OrbitalCameraSystem extends System {
       mat4.lookAt(cam.view, this.eye, this.center, this.up);
 
       // Rebuild projection (aspect may change on resize)
-      const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
       mat4.perspective(cam.projection, cam.fov, aspect, cam.near, cam.far);
       this.initializedCameras.add(id);
     }
 
-    this.lastCanvasWidth = canvasWidth;
-    this.lastCanvasHeight = canvasHeight;
+    this.lastAspect = aspect;
 
     // Reset accumulated deltas after applying them
     this.deltaTheta = 0;
@@ -224,36 +223,17 @@ export class OrbitalCameraSystem extends System {
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
     const deltaPixels = this.normalizeWheelDeltaYToPixels(e.deltaY, e.deltaMode);
-    this.deltaZoom += (deltaPixels / this.getWheelPageHeight()) * this.zoomSensitivity;
+    this.deltaZoom +=
+      (deltaPixels / OrbitalCameraSystem.WHEEL_PAGE_HEIGHT_PX) * this.zoomSensitivity;
   }
 
   private normalizeWheelDeltaYToPixels(deltaY: number, deltaMode: number): number {
     if (deltaMode === OrbitalCameraSystem.DOM_DELTA_LINE) {
-      return deltaY * this.getWheelLineHeight();
+      return deltaY * OrbitalCameraSystem.WHEEL_LINE_HEIGHT_PX;
     }
     if (deltaMode === OrbitalCameraSystem.DOM_DELTA_PAGE) {
-      return deltaY * this.getWheelPageHeight();
+      return deltaY * OrbitalCameraSystem.WHEEL_PAGE_HEIGHT_PX;
     }
     return deltaY;
-  }
-
-  private getWheelLineHeight(): number {
-    const canvas = this.canvas;
-    const view = canvas?.ownerDocument?.defaultView;
-    if (!view || !canvas) return 1;
-    const style = view.getComputedStyle(canvas);
-    const lineHeight = Number.parseFloat(style.lineHeight);
-    if (Number.isFinite(lineHeight) && lineHeight > 0) return lineHeight;
-    const fontSize = Number.parseFloat(style.fontSize);
-    if (Number.isFinite(fontSize) && fontSize > 0) return fontSize;
-    return 1;
-  }
-
-  private getWheelPageHeight(): number {
-    const canvasHeight = this.canvas?.clientHeight ?? this.canvas?.height;
-    if (typeof canvasHeight === 'number' && canvasHeight > 0) return canvasHeight;
-    const windowHeight = this.canvas?.ownerDocument?.defaultView?.innerHeight;
-    if (typeof windowHeight === 'number' && windowHeight > 0) return windowHeight;
-    return 1;
   }
 }

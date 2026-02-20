@@ -50,6 +50,19 @@ describe('Time', () => {
     expect(time.deltaTime).toBe(0);
   });
 
+  it('computes elapsed via absolute difference to avoid floating-point drift', () => {
+    const time = new Time();
+    const start = 1000;
+    const frameCount = 100_000;
+    const frameMs = 1;
+    time.update(start);
+    for (let i = 1; i <= frameCount; i++) {
+      time.update(start + i * frameMs);
+    }
+
+    expect(time.elapsed).toBe((frameCount * frameMs) / 1000);
+  });
+
   it('requires explicit timestamps for pause and resume', () => {
     const time = new Time();
 

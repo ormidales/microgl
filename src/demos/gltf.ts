@@ -157,8 +157,8 @@ export function runGltfDemo(): void {
       layout.fpsValue.textContent = (1 / time.deltaTime).toFixed(0);
     }
     renderer.clear(0.08, 0.08, 0.12, 1.0);
-    cameraSystem.update(em, time.deltaTime);
-    renderSystem.update(em, time.deltaTime);
+    cameraSystem.safeUpdate(em, time.deltaTime);
+    renderSystem.safeUpdate(em, time.deltaTime);
     requestAnimationFrame(loop);
   }
 

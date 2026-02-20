@@ -12,6 +12,7 @@ import type { EntityId, Component } from './types';
  */
 export class EntityManager {
   private nextId: EntityId = 0;
+  private readonly freeIds: EntityId[] = [];
   private readonly entities: Set<EntityId> = new Set();
 
   /** entity → set of attached component types */
@@ -30,7 +31,7 @@ export class EntityManager {
 
   /** Create a new entity and return its id. */
   createEntity(): EntityId {
-    const id = this.nextId++;
+    const id = this.freeIds.length > 0 ? this.freeIds.pop()! : this.nextId++;
     this.entities.add(id);
     this.signatures.set(id, new Set());
     this.views.get('')?.entities.add(id);
@@ -41,16 +42,23 @@ export class EntityManager {
   destroyEntity(id: EntityId): void {
     if (!this.entities.has(id)) return;
 
-    // Remove from every component store
-    for (const [componentType, store] of this.stores) {
-      store.delete(id);
-      if (store.size === 0) {
-        this.stores.delete(componentType);
+    // Remove only from stores for component types the entity actually owns
+    const signature = this.signatures.get(id);
+    if (signature) {
+      for (const componentType of signature) {
+        const store = this.stores.get(componentType);
+        if (store) {
+          store.delete(id);
+          if (store.size === 0) {
+            this.stores.delete(componentType);
+          }
+        }
       }
     }
     this.removeEntityFromViews(id);
     this.signatures.delete(id);
     this.entities.delete(id);
+    this.freeIds.push(id);
   }
 
   /** Return `true` if the entity exists. */
@@ -164,9 +172,11 @@ export class EntityManager {
   }
 
   private updateEntityInViews(id: EntityId, signature: Set<string>, changedComponentType?: string): void {
+    // Snapshot keys before iterating – deleteView mutates both `views` and
+    // `viewKeysByComponentType` during the loop, so a live reference would
+    // cause entries to be skipped when the current key is deleted from the Set.
     const keys = changedComponentType
-      ? this.viewKeysByComponentType.get(changedComponentType) ?? new Set<string>()
-      // We may delete views while iterating, so snapshot keys from `views` first.
+      ? [...(this.viewKeysByComponentType.get(changedComponentType) ?? [])]
       : [...this.views.keys()];
     for (const key of keys) {
       const view = this.views.get(key);
@@ -183,7 +193,10 @@ export class EntityManager {
   }
 
   private removeEntityFromViews(id: EntityId): void {
-    for (const [key, view] of this.views) {
+    // Snapshot entries before iterating – deleteView removes keys from `views`
+    // during the loop; iterating a live Map while deleting from it can skip
+    // entries that haven't been visited yet.
+    for (const [key, view] of [...this.views]) {
       view.entities.delete(id);
       if (view.entities.size === 0) {
         this.deleteView(key, view.componentTypes);

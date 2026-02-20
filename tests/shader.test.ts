@@ -256,6 +256,32 @@ describe('ShaderCache', () => {
     expect(gl.deleteProgram).not.toHaveBeenCalled();
     expect(gl.deleteShader).not.toHaveBeenCalled();
   });
+
+  it('returns distinct programs when two source pairs produce the same FNV-1a hash (collision)', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    // Simulate a hash collision by forcing fnv1a to always return the same key.
+    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+      'collision-key',
+    );
+
+    const p1 = cache.getProgram('vert-a', 'frag-a');
+    const p2 = cache.getProgram('vert-b', 'frag-b'); // same hash, different sources
+
+    // Same sources must return the already-cached program.
+    const p3 = cache.getProgram('vert-a', 'frag-a');
+    const p4 = cache.getProgram('vert-b', 'frag-b');
+
+    expect(p1).not.toBe(p2);
+    expect(p1).toBe(p3);
+    expect(p2).toBe(p4);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+
+    vi.restoreAllMocks();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -382,9 +408,8 @@ describe('Material', () => {
     expect(restoredGl.useProgram).toHaveBeenCalledWith(mat.program);
   });
 
-  it('restore keeps previous context when restore fails', () => {
+  it('restore keeps previous context and nulls program when restore fails', () => {
     const mat = new Material(gl);
-    const initialProgram = mat.program;
     const failingGl = createMockGL({
       getProgramParameter: vi.fn(() => false),
       getProgramInfoLog: vi.fn(() => 'link failed'),
@@ -392,8 +417,30 @@ describe('Material', () => {
 
     expect(() => mat.restore(failingGl)).toThrow(/Failed to link shader program/);
 
-    mat.use();
-    expect(gl.useProgram).toHaveBeenCalledWith(initialProgram);
+    expect(mat.program).toBeNull();
+    mat.use(); // must be a no-op
+    expect(gl.useProgram).not.toHaveBeenCalled();
+    expect(failingGl.useProgram).not.toHaveBeenCalled();
+  });
+
+  it('restore nulls program when same-context restore fails', () => {
+    const failingGl = createMockGL({
+      getProgramParameter: vi.fn(() => false),
+      getProgramInfoLog: vi.fn(() => 'link failed'),
+    });
+    // First call succeeds (initial construction) - subsequent calls fail
+    let callCount = 0;
+    (failingGl.getProgramParameter as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      return callCount++ === 0;
+    });
+
+    const mat = new Material(failingGl);
+    expect(mat.program).toBeDefined();
+
+    expect(() => mat.restore()).toThrow(/Failed to link shader program/);
+
+    expect(mat.program).toBeNull();
+    mat.use(); // must be a no-op
     expect(failingGl.useProgram).not.toHaveBeenCalled();
   });
 });

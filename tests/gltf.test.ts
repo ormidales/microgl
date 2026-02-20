@@ -332,6 +332,21 @@ describe('readAccessorFloat', () => {
 
     expect(() => readAccessorFloat(json, [new ArrayBuffer(4)], 0)).toThrow(/Sparse accessor 0 is not supported/);
   });
+
+  it('throws with accessor index when component type is invalid', () => {
+    const bin = new Float32Array([1, 2, 3]).buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: 9999, count: 1, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/Accessor 0/);
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/9999/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -422,6 +437,21 @@ describe('readAccessorIndices', () => {
     };
 
     expect(() => readAccessorIndices(json, [new ArrayBuffer(2)], 0)).toThrow(/Sparse accessor 0 is not supported/);
+  });
+
+  it('throws with accessor index when index component type is invalid', () => {
+    const bin = new Uint16Array([0, 1, 2]).buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: 9999, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      buffers: [{ byteLength: 6 }],
+    };
+
+    expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/Accessor 0/);
+    expect(() => readAccessorIndices(json, [bin], 0)).toThrow(/9999/);
   });
 });
 

@@ -87,8 +87,8 @@ export function runStressDemo(): void {
       layout.fpsValue.textContent = (1 / time.deltaTime).toFixed(0);
     }
     renderer.clear(0.05, 0.05, 0.08, 1.0);
-    movementSystem.update(em, time.deltaTime);
-    renderSystem.update(em, time.deltaTime);
+    movementSystem.safeUpdate(em, time.deltaTime);
+    renderSystem.safeUpdate(em, time.deltaTime);
     requestAnimationFrame(loop);
   }
 

@@ -694,6 +694,33 @@ describe('OrbitalCameraSystem', () => {
     perspectiveSpy.mockRestore();
   });
 
+  it('does not rebuild projection when canvas is resized proportionally', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new CameraComponent());
+
+    const canvas = {
+      width: 800,
+      height: 600,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.update(em, 0.016);
+
+    const perspectiveSpy = vi.spyOn(mat4, 'perspective');
+
+    // Proportional resize: same aspect ratio (4:3), different dimensions
+    (canvas as any).width = 1600;
+    (canvas as any).height = 1200;
+    sys.update(em, 0.016);
+
+    expect(perspectiveSpy).not.toHaveBeenCalled();
+    perspectiveSpy.mockRestore();
+  });
+
   it('clamps phi to avoid poles', () => {
     const em = new EntityManager();
     const id = em.createEntity();

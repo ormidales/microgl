@@ -52,8 +52,7 @@ export class OrbitalCameraSystem extends System {
   private deltaTheta = 0;
   private deltaPhi = 0;
   private deltaZoom = 0;
-  private lastCanvasWidth: number | null = null;
-  private lastCanvasHeight: number | null = null;
+  private lastAspect: number | null = null;
   private readonly initializedCameras = new Set<number>();
   private readonly eye = vec3.create();
   private readonly center = vec3.create();
@@ -124,10 +123,8 @@ export class OrbitalCameraSystem extends System {
 
   update(em: EntityManager, _deltaTime: number): void {
     const entities = em.getEntitiesWith(...this.requiredComponents);
-    const canvasWidth = this.canvas?.width ?? 0;
-    const canvasHeight = this.canvas?.height ?? 0;
-    const canvasSizeChanged =
-      canvasWidth !== this.lastCanvasWidth || canvasHeight !== this.lastCanvasHeight;
+    const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
+    const aspectChanged = aspect !== this.lastAspect;
     const hasInputDelta = this.deltaTheta !== 0 || this.deltaPhi !== 0 || this.deltaZoom !== 0;
 
     for (const id of entities) {
@@ -147,7 +144,7 @@ export class OrbitalCameraSystem extends System {
       cam.radius = Math.max(this.minRadius, Math.min(this.maxRadius, cam.radius));
 
       const shouldRebuildMatrices =
-        hasInputDelta || canvasSizeChanged || !this.initializedCameras.has(id);
+        hasInputDelta || aspectChanged || !this.initializedCameras.has(id);
       if (!shouldRebuildMatrices) continue;
 
       // Spherical → Cartesian
@@ -161,13 +158,11 @@ export class OrbitalCameraSystem extends System {
       mat4.lookAt(cam.view, this.eye, this.center, this.up);
 
       // Rebuild projection (aspect may change on resize)
-      const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
       mat4.perspective(cam.projection, cam.fov, aspect, cam.near, cam.far);
       this.initializedCameras.add(id);
     }
 
-    this.lastCanvasWidth = canvasWidth;
-    this.lastCanvasHeight = canvasHeight;
+    this.lastAspect = aspect;
 
     // Reset accumulated deltas after applying them
     this.deltaTheta = 0;

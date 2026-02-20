@@ -44,7 +44,7 @@ void main() {
 // ---------------------------------------------------------------------------
 
 export class Material {
-  public program: WebGLProgram;
+  public program: WebGLProgram | null;
 
   private gl: WebGL2RenderingContext;
   private readonly uniformLocations: Map<string, WebGLUniformLocation | null> = new Map();
@@ -75,6 +75,7 @@ export class Material {
 
   /** Bind this material's program as the active shader program. */
   use(): void {
+    if (!this.program) return;
     this.gl.useProgram(this.program);
   }
 
@@ -131,6 +132,7 @@ export class Material {
       this.program = restoredProgram;
     } catch (error) {
       this.gl = previousGl;
+      this.program = null;
       throw error;
     }
   }
@@ -144,6 +146,7 @@ export class Material {
    * Returns `null` for inactive/optimized-away uniforms (WebGL spec compliant).
    */
   private location(name: string): WebGLUniformLocation | null {
+    if (!this.program) return null;
     if (this.uniformLocations.has(name)) return this.uniformLocations.get(name) ?? null;
 
     const loc = this.gl.getUniformLocation(this.program, name);

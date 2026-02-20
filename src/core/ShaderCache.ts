@@ -27,6 +27,8 @@ export class ShaderCache {
   private readonly programShaders: Map<string, [string, string]> = new Map();
   /** shader key → number of programs currently referencing it */
   private readonly shaderRefCounts: Map<string, number> = new Map();
+  /** program key → combined source string (only for auto-keyed entries, used to detect hash collisions) */
+  private readonly programSources: Map<string, string> = new Map();
 
   private readonly gl: WebGL2RenderingContext;
 
@@ -64,13 +66,24 @@ export class ShaderCache {
    * @param key Optional cache key. Defaults to a hash of both sources.
    */
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
-    const cacheKey =
-      key ??
-      ShaderCache.fnv1a(
-        `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`,
-      );
+    const combinedSource =
+      key === undefined
+        ? `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`
+        : undefined;
+    let cacheKey = key ?? ShaderCache.fnv1a(combinedSource!);
+
     const existing = this.programs.get(cacheKey);
-    if (existing) return existing;
+    if (existing !== undefined) {
+      // Guard against FNV-1a hash collisions: verify sources match before returning cache hit.
+      if (combinedSource !== undefined && this.programSources.get(cacheKey) !== combinedSource) {
+        // Collision detected: use the full combined source string as a collision-free key.
+        cacheKey = combinedSource;
+        const collisionExisting = this.programs.get(cacheKey);
+        if (collisionExisting !== undefined) return collisionExisting;
+      } else {
+        return existing;
+      }
+    }
 
     const vertexShaderKey = vertexSource;
     const fragmentShaderKey = fragmentSource;
@@ -79,6 +92,9 @@ export class ShaderCache {
     const program = createProgram(this.gl, vs, fs);
     this.programs.set(cacheKey, program);
     this.programShaders.set(cacheKey, [vertexShaderKey, fragmentShaderKey]);
+    if (combinedSource !== undefined) {
+      this.programSources.set(cacheKey, combinedSource);
+    }
     this.shaderRefCounts.set(vertexShaderKey, (this.shaderRefCounts.get(vertexShaderKey) ?? 0) + 1);
     this.shaderRefCounts.set(fragmentShaderKey, (this.shaderRefCounts.get(fragmentShaderKey) ?? 0) + 1);
     return program;
@@ -95,6 +111,7 @@ export class ShaderCache {
 
     this.gl.deleteProgram(program);
     this.programs.delete(key);
+    this.programSources.delete(key);
 
     const shaderKeys = this.programShaders.get(key);
     if (!shaderKeys) return;
@@ -128,6 +145,7 @@ export class ShaderCache {
     }
     this.programs.clear();
     this.programShaders.clear();
+    this.programSources.clear();
     this.shaderRefCounts.clear();
     this.shaders.clear();
   }

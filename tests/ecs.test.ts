@@ -254,6 +254,7 @@ describe('RenderSystem', () => {
       TRIANGLES: 0x0004,
       UNSIGNED_SHORT: 0x1403,
       UNSIGNED_INT: 0x1405,
+      UNSIGNED_BYTE: 0x1401,
       createVertexArray: vi.fn(() => ({} as WebGLVertexArrayObject)),
       createBuffer: vi.fn(() => ({} as WebGLBuffer)),
       bindVertexArray: vi.fn(),
@@ -428,6 +429,30 @@ describe('RenderSystem', () => {
       gl.TRIANGLES,
       3,
       gl.UNSIGNED_INT,
+      0,
+    );
+  });
+
+  it('issues drawElements with UNSIGNED_BYTE for Uint8 indices', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(
+        new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]),
+        new Uint8Array([0, 1, 2]),
+      ),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+
+    sys.update(em, 0.016);
+
+    expect(gl.drawElements).toHaveBeenCalledWith(
+      gl.TRIANGLES,
+      3,
+      gl.UNSIGNED_BYTE,
       0,
     );
   });

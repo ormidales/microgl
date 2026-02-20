@@ -148,7 +148,11 @@ export class RenderSystem extends System {
       ebo,
       vertexCount: Math.floor(mesh.vertices.length / 3),
       indexCount: mesh.indices.length,
-      indexType: mesh.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT,
+      indexType: mesh.indices instanceof Uint32Array
+        ? gl.UNSIGNED_INT
+        : mesh.indices instanceof Uint8Array
+          ? gl.UNSIGNED_BYTE
+          : gl.UNSIGNED_SHORT,
     };
     this.consecutiveMeshBufferAllocationFailures = 0;
     this.warnedAboutMeshBufferAllocationFailure = false;

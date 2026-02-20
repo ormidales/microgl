@@ -825,6 +825,125 @@ describe('loadGltf', () => {
     const glb = buildGlb(json, bin);
     await expect(loadGltf(glb)).rejects.toThrow(/Invalid position data/);
   });
+
+  it('normalizes non-unit normals when normalizeNormals option is true', async () => {
+    // Use a normal with length 2 (should become unit length after normalization)
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const normals = new Float32Array([0, 0, 2, 2, 0, 0, 0, 2, 0]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 36 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(normals.buffer as ArrayBuffer), 36);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 72);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'Test', primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 36 },
+        { buffer: 0, byteOffset: 72, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb, { normalizeNormals: true });
+
+    const n = result.meshes[0].normals;
+    // Each normal should now be unit length
+    for (let i = 0; i + 2 < n.length; i += 3) {
+      const len = Math.sqrt(n[i] ** 2 + n[i + 1] ** 2 + n[i + 2] ** 2);
+      expect(len).toBeCloseTo(1, 5);
+    }
+    // First normal (0,0,2) -> (0,0,1)
+    expect(n[0]).toBeCloseTo(0, 5);
+    expect(n[1]).toBeCloseTo(0, 5);
+    expect(n[2]).toBeCloseTo(1, 5);
+  });
+
+  it('does not normalize normals when normalizeNormals option is false or omitted', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const normals = new Float32Array([0, 0, 2, 2, 0, 0, 0, 2, 0]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 36 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(normals.buffer as ArrayBuffer), 36);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 72);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'Test', primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 36 },
+        { buffer: 0, byteOffset: 72, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    // Original non-unit normals are preserved
+    expect(result.meshes[0].normals[2]).toBeCloseTo(2, 5);
+  });
+
+  it('leaves zero-length normals unchanged when normalizeNormals is true', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const normals = new Float32Array([0, 0, 0, 0, 0, 1, 0, 0, 1]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 36 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(normals.buffer as ArrayBuffer), 36);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 72);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'Test', primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2 }] }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 2, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 36 },
+        { buffer: 0, byteOffset: 72, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb, { normalizeNormals: true });
+
+    const n = result.meshes[0].normals;
+    // Zero-length normal (0,0,0) is left unchanged (no NaN)
+    expect(n[0]).toBe(0);
+    expect(n[1]).toBe(0);
+    expect(n[2]).toBe(0);
+    // Already-unit normal (0,0,1) stays unchanged
+    expect(n[5]).toBeCloseTo(1, 5);
+  });
 });
 
 // ---------------------------------------------------------------------------

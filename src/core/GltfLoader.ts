@@ -35,6 +35,8 @@ const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 export interface GltfLoaderOptions {
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   maxJsonBufferBytes?: number;
+  /** When true, each VEC3 normal is normalized to unit length after loading. */
+  normalizeNormals?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +64,12 @@ export async function loadGltf(
   const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
 
   const meshes = extractMeshes(json, buffers);
+
+  if (options.normalizeNormals) {
+    for (const mesh of meshes) {
+      normalizeNormalArray(mesh.normals);
+    }
+  }
 
   return { meshes, nodes: json.nodes ?? [] };
 }
@@ -273,6 +281,24 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
   }
 
   return result;
+}
+
+/**
+ * Normalize each VEC3 normal in-place. Vectors with zero length are left
+ * unchanged to avoid NaN values in degenerate geometry.
+ */
+function normalizeNormalArray(normals: Float32Array): void {
+  for (let i = 0; i + 2 < normals.length; i += 3) {
+    const x = normals[i];
+    const y = normals[i + 1];
+    const z = normals[i + 2];
+    const len = Math.sqrt(x * x + y * y + z * z);
+    if (len > 0) {
+      normals[i] = x / len;
+      normals[i + 1] = y / len;
+      normals[i + 2] = z / len;
+    }
+  }
 }
 
 function computePositionBounds(positions: Float32Array): { min: number[]; max: number[] } {

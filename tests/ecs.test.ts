@@ -277,6 +277,51 @@ describe('TransformComponent', () => {
     expect(t.x).toBe(0);
     expect(t.scaleX).toBe(1);
   });
+
+  it('needsModelMatrixUpdate returns true initially', () => {
+    const t = new TransformComponent();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('needsModelMatrixUpdate returns false after markModelMatrixClean', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+  });
+
+  it('setDirty forces needsModelMatrixUpdate to return true even when values are unchanged', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('setDirty works after component is recycled with identical values', () => {
+    // Simulate recycling: component cleaned, then reinitialized to the same values
+    const t = new TransformComponent(5, 5, 5);
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+
+    // External script reassigns to same values – change detection would miss this
+    t.x = 5;
+    t.y = 5;
+    t.z = 5;
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+
+    // setDirty forces an update
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
+  it('markModelMatrixClean clears dirty flag set by setDirty', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    t.setDirty();
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+  });
 });
 
 describe('MeshComponent', () => {

@@ -55,4 +55,15 @@ export class TransformComponent implements Component {
     this.lastScaleZ = this.scaleZ;
     this.dirty = false;
   }
+
+  /**
+   * Forces the component to be treated as dirty on the next
+   * {@link needsModelMatrixUpdate} call, regardless of whether the tracked
+   * field values have changed.  Use this after recycling a component instance
+   * or after mutating properties through paths that bypass the normal change-
+   * detection mechanism (e.g. bulk-assignment from an external script).
+   */
+  setDirty(): void {
+    this.dirty = true;
+  }
 }

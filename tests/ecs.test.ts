@@ -836,7 +836,7 @@ describe('OrbitalCameraSystem', () => {
     });
   });
 
-  it('normalizes wheel zoom across delta modes using runtime line/page sizes', () => {
+  it('normalizes wheel zoom across delta modes using fixed line/page constants', () => {
     const em = new EntityManager();
     const id = em.createEntity();
     const cam = new CameraComponent();
@@ -869,22 +869,26 @@ describe('OrbitalCameraSystem', () => {
     const startRadius = cam.radius;
 
     const preventDefault = vi.fn();
+    // 48 raw pixels → (48 / 600) * 0.01
     wheel?.({ deltaY: 48, deltaMode: 0, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const pixelStep = cam.radius - startRadius;
 
-    wheel?.({ deltaY: 2, deltaMode: 1, preventDefault } as unknown as Event);
+    // 3 lines × 16 px/line = 48 px → same step
+    wheel?.({ deltaY: 3, deltaMode: 1, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const lineStep = cam.radius - startRadius - pixelStep;
 
-    wheel?.({ deltaY: 0.05, deltaMode: 2, preventDefault } as unknown as Event);
+    // 0.08 pages × 600 px/page = 48 px → same step
+    wheel?.({ deltaY: 0.08, deltaMode: 2, preventDefault } as unknown as Event);
     sys.update(em, 0.016);
     const pageStep = cam.radius - startRadius - pixelStep - lineStep;
 
     expect(preventDefault).toHaveBeenCalledTimes(3);
-    expect(getComputedStyle).toHaveBeenCalledTimes(1);
+    // No DOM query needed — constants are now fixed
+    expect(getComputedStyle).not.toHaveBeenCalled();
     expect(pixelStep).toBeCloseTo(lineStep);
     expect(lineStep).toBeCloseTo(pageStep);
-    expect(pixelStep).toBeCloseTo(0.0005);
+    expect(pixelStep).toBeCloseTo(0.0008);
   });
 });

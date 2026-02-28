@@ -208,6 +208,21 @@ export class EntityManager {
     }
   }
 
+  /**
+   * Remove all cached views that currently contain no entities.
+   *
+   * Call this after a batch of one-off `getEntitiesWith` queries (e.g.
+   * procedurally generated component-type combinations) to prevent the
+   * internal view cache from growing without bound.
+   */
+  clearEmptyViews(): void {
+    for (const [key, view] of [...this.views]) {
+      if (view.entities.size === 0) {
+        this.deleteView(key, view.componentTypes);
+      }
+    }
+  }
+
   private deleteView(key: string, componentTypes: string[]): void {
     this.views.delete(key);
     for (const componentType of componentTypes) {

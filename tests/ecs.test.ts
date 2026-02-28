@@ -291,6 +291,45 @@ describe('EntityManager', () => {
     }
     expect((em as any).nextId).toBe(1);
   });
+
+  it('clearEmptyViews removes views with zero entities', () => {
+    const em = new EntityManager();
+
+    // Query with a type that no entity owns – view is cached but empty
+    em.getEntitiesWith('Phantom');
+    expect((em as any).views.has('Phantom')).toBe(true);
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.has('Phantom')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Phantom')).toBe(false);
+  });
+
+  it('clearEmptyViews does not remove views that have at least one entity', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.getEntitiesWith('Transform');
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.has('Transform')).toBe(true);
+    expect(em.getEntitiesWith('Transform')).toEqual([id]);
+  });
+
+  it('clearEmptyViews prevents unbounded cache growth from one-off queries', () => {
+    const em = new EntityManager();
+
+    for (let i = 0; i < 100; i++) {
+      em.getEntitiesWith(`UniqueComponent_${i}`);
+    }
+    expect((em as any).views.size).toBe(100);
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.size).toBe(0);
+    expect((em as any).viewKeysByComponentType.size).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

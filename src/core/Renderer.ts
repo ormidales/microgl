@@ -6,11 +6,13 @@ export class Renderer {
   public gl: WebGL2RenderingContext;
 
   private resizeObserver: ResizeObserver | null;
+  private readonly container: HTMLElement;
   private readonly contextAttributes?: WebGLContextAttributes;
   private readonly contextLostHandlers: Set<() => void> = new Set();
   private readonly contextRestoredHandlers: Set<(gl: WebGL2RenderingContext) => void> = new Set();
 
   constructor(container: HTMLElement = document.body, contextAttributes?: WebGLContextAttributes) {
+    this.container = container;
     this.canvas = document.createElement('canvas');
     this.canvas.style.display = 'block';
     this.canvas.style.width = '100%';
@@ -29,7 +31,7 @@ export class Renderer {
     this.resizeViewport();
 
     this.resizeObserver = new ResizeObserver((entries) => this.resizeViewport(entries[0]));
-    this.resizeObserver.observe(this.canvas);
+    this.resizeObserver.observe(this.container);
   }
 
   /** Synchronize the drawing buffer size with the canvas CSS size. */
@@ -70,7 +72,7 @@ export class Renderer {
 
   /** Stop observing resize events and remove the canvas. */
   dispose(): void {
-    this.resizeObserver?.unobserve(this.canvas);
+    this.resizeObserver?.unobserve(this.container);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);

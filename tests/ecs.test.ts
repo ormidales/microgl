@@ -55,6 +55,19 @@ describe('EntityManager', () => {
     expect(em.getComponent(id, 'Transform')).toBeUndefined();
   });
 
+  it('removeComponent is a no-op when entity does not have the component', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    // Calling removeComponent on a type the entity never had should not throw
+    // and should not alter any state.
+    em.removeComponent(id, 'NonExistent');
+    expect(em.hasComponent(id, 'NonExistent')).toBe(false);
+    // Views and signatures must remain untouched
+    expect((em as any).signatures.get(id).size).toBe(0);
+    expect((em as any).stores.has('NonExistent')).toBe(false);
+  });
+
   it('prunes empty component store on removeComponent', () => {
     const em = new EntityManager();
     const id = em.createEntity();

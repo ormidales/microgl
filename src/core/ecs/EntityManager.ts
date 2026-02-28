@@ -91,6 +91,8 @@ export class EntityManager {
 
   /** Remove a component type from an entity. */
   removeComponent(id: EntityId, componentType: string): void {
+    if (!this.hasComponent(id, componentType)) return;
+
     const store = this.stores.get(componentType);
     if (store) {
       store.delete(id);

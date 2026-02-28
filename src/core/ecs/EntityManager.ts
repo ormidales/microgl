@@ -83,8 +83,10 @@ export class EntityManager {
     store.set(id, component);
 
     const signature = this.signatures.get(id);
-    signature?.add(cType);
-    if (signature) this.updateEntityInViews(id, signature, cType);
+    if (signature && !signature.has(cType)) {
+      signature.add(cType);
+      this.updateEntityInViews(id, signature, cType);
+    }
   }
 
   /** Remove a component type from an entity. */

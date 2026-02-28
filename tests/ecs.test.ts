@@ -184,6 +184,19 @@ describe('EntityManager', () => {
     expect(em.hasComponent(999, 'Transform')).toBe(false);
   });
 
+  it('does not trigger updateEntityInViews when updating an existing component type', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent(1, 2, 3));
+    em.getEntitiesWith('Transform'); // register a view
+
+    const spy = vi.spyOn(em as any, 'updateEntityInViews');
+    em.addComponent(id, new TransformComponent(4, 5, 6));
+
+    expect(spy).not.toHaveBeenCalled();
+    expect((em.getComponent(id, 'Transform') as TransformComponent).x).toBe(4);
+  });
+
   it('destroyEntity is a no-op for unknown ids', () => {
     const em = new EntityManager();
     expect(() => em.destroyEntity(42)).not.toThrow();

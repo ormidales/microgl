@@ -46,9 +46,8 @@ export class Renderer {
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;
+      this.gl.viewport(0, 0, width, height);
     }
-
-    this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
   /** Clear the framebuffer with the given RGBA color. */

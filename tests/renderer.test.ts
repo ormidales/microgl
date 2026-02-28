@@ -168,6 +168,31 @@ describe('Renderer', () => {
     expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
   });
 
+  it('does not call gl.viewport when dimensions are unchanged', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+    // The constructor calls resizeViewport() which may call gl.viewport once.
+    const callsAfterInit = (gl.viewport as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    MockResizeObserver.instances[0].trigger([
+      { devicePixelContentBoxSize: [{ inlineSize: 400, blockSize: 200 }] } as unknown as ResizeObserverEntry,
+    ]);
+    expect(gl.viewport).toHaveBeenCalledTimes(callsAfterInit + 1);
+
+    // Trigger again with same dimensions — viewport should NOT be called again
+    MockResizeObserver.instances[0].trigger([
+      { devicePixelContentBoxSize: [{ inlineSize: 400, blockSize: 200 }] } as unknown as ResizeObserverEntry,
+    ]);
+    expect(gl.viewport).toHaveBeenCalledTimes(callsAfterInit + 1);
+  });
+
   it('sets resizeObserver to null after dispose to allow garbage collection', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);

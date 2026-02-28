@@ -83,12 +83,16 @@ export class EntityManager {
     store.set(id, component);
 
     const signature = this.signatures.get(id);
-    signature?.add(cType);
-    if (signature) this.updateEntityInViews(id, signature, cType);
+    if (signature && !signature.has(cType)) {
+      signature.add(cType);
+      this.updateEntityInViews(id, signature, cType);
+    }
   }
 
   /** Remove a component type from an entity. */
   removeComponent(id: EntityId, componentType: string): void {
+    if (!this.hasComponent(id, componentType)) return;
+
     const store = this.stores.get(componentType);
     if (store) {
       store.delete(id);
@@ -198,6 +202,21 @@ export class EntityManager {
     // entries that haven't been visited yet.
     for (const [key, view] of [...this.views]) {
       view.entities.delete(id);
+      if (view.entities.size === 0) {
+        this.deleteView(key, view.componentTypes);
+      }
+    }
+  }
+
+  /**
+   * Remove all cached views that currently contain no entities.
+   *
+   * Call this after a batch of one-off `getEntitiesWith` queries (e.g.
+   * procedurally generated component-type combinations) to prevent the
+   * internal view cache from growing without bound.
+   */
+  clearEmptyViews(): void {
+    for (const [key, view] of [...this.views]) {
       if (view.entities.size === 0) {
         this.deleteView(key, view.componentTypes);
       }

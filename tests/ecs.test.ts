@@ -55,6 +55,19 @@ describe('EntityManager', () => {
     expect(em.getComponent(id, 'Transform')).toBeUndefined();
   });
 
+  it('removeComponent is a no-op when entity does not have the component', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    // Calling removeComponent on a type the entity never had should not throw
+    // and should not alter any state.
+    em.removeComponent(id, 'NonExistent');
+    expect(em.hasComponent(id, 'NonExistent')).toBe(false);
+    // Views and signatures must remain untouched
+    expect((em as any).signatures.get(id).size).toBe(0);
+    expect((em as any).stores.has('NonExistent')).toBe(false);
+  });
+
   it('prunes empty component store on removeComponent', () => {
     const em = new EntityManager();
     const id = em.createEntity();
@@ -184,6 +197,19 @@ describe('EntityManager', () => {
     expect(em.hasComponent(999, 'Transform')).toBe(false);
   });
 
+  it('does not trigger updateEntityInViews when updating an existing component type', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent(1, 2, 3));
+    em.getEntitiesWith('Transform'); // register a view
+
+    const spy = vi.spyOn(em as any, 'updateEntityInViews');
+    em.addComponent(id, new TransformComponent(4, 5, 6));
+
+    expect(spy).not.toHaveBeenCalled();
+    expect((em.getComponent(id, 'Transform') as TransformComponent).x).toBe(4);
+  });
+
   it('destroyEntity is a no-op for unknown ids', () => {
     const em = new EntityManager();
     expect(() => em.destroyEntity(42)).not.toThrow();
@@ -264,6 +290,45 @@ describe('EntityManager', () => {
       em.createEntity(); // reuses id, nextId stays 1
     }
     expect((em as any).nextId).toBe(1);
+  });
+
+  it('clearEmptyViews removes views with zero entities', () => {
+    const em = new EntityManager();
+
+    // Query with a type that no entity owns – view is cached but empty
+    em.getEntitiesWith('Phantom');
+    expect((em as any).views.has('Phantom')).toBe(true);
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.has('Phantom')).toBe(false);
+    expect((em as any).viewKeysByComponentType.has('Phantom')).toBe(false);
+  });
+
+  it('clearEmptyViews does not remove views that have at least one entity', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.getEntitiesWith('Transform');
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.has('Transform')).toBe(true);
+    expect(em.getEntitiesWith('Transform')).toEqual([id]);
+  });
+
+  it('clearEmptyViews prevents unbounded cache growth from one-off queries', () => {
+    const em = new EntityManager();
+
+    for (let i = 0; i < 100; i++) {
+      em.getEntitiesWith(`UniqueComponent_${i}`);
+    }
+    expect((em as any).views.size).toBe(100);
+
+    em.clearEmptyViews();
+
+    expect((em as any).views.size).toBe(0);
+    expect((em as any).viewKeysByComponentType.size).toBe(0);
   });
 });
 

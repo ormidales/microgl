@@ -183,6 +183,29 @@ describe('Renderer', () => {
     expect((renderer as unknown as Record<string, unknown>).resizeObserver).toBeNull();
   });
 
+  it('does not call gl.viewport when canvas dimensions are unchanged', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+
+    expect(gl.viewport).toHaveBeenCalledTimes(1);
+    expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 200, 100);
+
+    MockResizeObserver.instances[0].trigger([
+      { devicePixelContentBoxSize: [{ inlineSize: 200, blockSize: 100 }] } as unknown as ResizeObserverEntry,
+    ]);
+
+    expect(gl.viewport).toHaveBeenCalledTimes(1);
+    expect(canvas.width).toBe(200);
+    expect(canvas.height).toBe(100);
+  });
+
   it('unobserves canvas and disconnects observer only once on repeated dispose', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);

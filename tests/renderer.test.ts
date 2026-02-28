@@ -222,8 +222,23 @@ describe('Renderer', () => {
     renderer.dispose();
     renderer.dispose();
 
-    expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledWith(canvas);
+    expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledWith(container);
     expect(MockResizeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
     expect(MockResizeObserver.instances[0].unobserve).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes the container element to prevent ResizeObserver feedback loops', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+
+    expect(MockResizeObserver.instances[0].observe).toHaveBeenCalledWith(container);
+    expect(MockResizeObserver.instances[0].observe).not.toHaveBeenCalledWith(canvas);
   });
 });

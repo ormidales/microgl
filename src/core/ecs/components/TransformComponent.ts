@@ -2,12 +2,12 @@ import type { Component, Quaternion } from '../types';
 import { mat4 } from 'gl-matrix';
 
 /**
- * Stores the position, rotation (unit quaternion `[x, y, z, w]`), and scale of an entity.
+ * Stores the position, rotation (quaternion `[x, y, z, w]`), and scale of an entity.
  *
  * The `rotation` property is typed as `Quaternion` (a strict `[number, number, number, number]`
  * tuple) so that the TypeScript compiler rejects any assignment of a plain `number[]` that
  * might have the wrong length, preventing silent matrix-computation failures in systems such
- * as {@link RenderSystem}.
+ * as {@link RenderSystem}. The caller is responsible for keeping the quaternion normalised.
  */
 export class TransformComponent implements Component {
   public readonly type = 'Transform';

@@ -263,12 +263,12 @@ export function buildNodeLocalMatrix(node: GltfNode): number[] {
     return node.matrix.slice();
   }
 
-  // 3. No transform data at all → identity
+  // 2. No transform data at all → identity
   if (!node.translation && !node.rotation && !node.scale) {
     return IDENTITY_MAT4.slice();
   }
 
-  // 2. TRS composition (with identity defaults)
+  // 3. TRS composition (with identity defaults)
   const tx = node.translation?.[0] ?? 0;
   const ty = node.translation?.[1] ?? 0;
   const tz = node.translation?.[2] ?? 0;

@@ -4,6 +4,7 @@ import {
   parseContainer,
   readAccessorFloat,
   readAccessorIndices,
+  buildNodeLocalMatrix,
 } from '../src/core/GltfLoader';
 import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset } from '../src/core/GltfTypes';
@@ -772,6 +773,8 @@ describe('loadGltf', () => {
     expect(result.nodes).toHaveLength(1);
     expect(result.nodes[0].name).toBe('Root');
     expect(result.nodes[0].translation).toEqual([1, 2, 3]);
+    // loader must inject localMatrix
+    expect(result.nodes[0].localMatrix).toHaveLength(16);
   });
 
   it('handles mesh with no indices', async () => {
@@ -1013,5 +1016,115 @@ describe('MeshComponent with normals and uvs', () => {
     expect(m.uvs.length).toBe(2);
     expect(m.min).toEqual([0, 0, 0]);
     expect(m.max).toEqual([1, 1, 1]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildNodeLocalMatrix
+// ---------------------------------------------------------------------------
+
+const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+describe('buildNodeLocalMatrix', () => {
+  it('returns identity matrix when node has no transform properties', () => {
+    const result = buildNodeLocalMatrix({});
+    expect(result).toEqual(IDENTITY);
+  });
+
+  it('returns identity matrix when node has only name/mesh/children', () => {
+    const result = buildNodeLocalMatrix({ name: 'Empty', mesh: 0, children: [1] });
+    expect(result).toEqual(IDENTITY);
+  });
+
+  it('returns a copy of the matrix property when present', () => {
+    const m = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 1, 2, 3, 1];
+    const result = buildNodeLocalMatrix({ matrix: m });
+    expect(result).toEqual(m);
+    // Must be a copy, not the same reference
+    expect(result).not.toBe(m);
+  });
+
+  it('ignores a malformed matrix (length !== 16) and falls back to TRS', () => {
+    // 15-element array should be ignored; no TRS → identity
+    const result = buildNodeLocalMatrix({ matrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0] });
+    expect(result).toEqual(IDENTITY);
+  });
+
+  it('applies translation only', () => {
+    const result = buildNodeLocalMatrix({ translation: [3, 5, 7] });
+    // Column-major: translation lives in column 3 (indices 12-14)
+    expect(result[12]).toBe(3);
+    expect(result[13]).toBe(5);
+    expect(result[14]).toBe(7);
+    expect(result[15]).toBe(1);
+    // Rotation/scale part must be identity
+    expect(result[0]).toBeCloseTo(1);
+    expect(result[5]).toBeCloseTo(1);
+    expect(result[10]).toBeCloseTo(1);
+  });
+
+  it('applies scale only', () => {
+    const result = buildNodeLocalMatrix({ scale: [2, 3, 4] });
+    expect(result[0]).toBeCloseTo(2);
+    expect(result[5]).toBeCloseTo(3);
+    expect(result[10]).toBeCloseTo(4);
+    expect(result[12]).toBe(0);
+    expect(result[13]).toBe(0);
+    expect(result[14]).toBe(0);
+  });
+
+  it('applies identity rotation (quaternion [0,0,0,1]) correctly', () => {
+    const result = buildNodeLocalMatrix({ rotation: [0, 0, 0, 1] });
+    expect(result).toEqual(IDENTITY);
+  });
+
+  it('applies 90-degree rotation around Z axis', () => {
+    // quaternion for 90° around Z: (0, 0, sin(π/4), cos(π/4))
+    const s = Math.sin(Math.PI / 4);
+    const c = Math.cos(Math.PI / 4);
+    const result = buildNodeLocalMatrix({ rotation: [0, 0, s, c] });
+    // Column 0 should be (0, 1, 0, 0) — X-axis maps to Y
+    expect(result[0]).toBeCloseTo(0, 5);
+    expect(result[1]).toBeCloseTo(1, 5);
+    expect(result[2]).toBeCloseTo(0, 5);
+    // Column 1 should be (-1, 0, 0, 0) — Y-axis maps to -X
+    expect(result[4]).toBeCloseTo(-1, 5);
+    expect(result[5]).toBeCloseTo(0, 5);
+    expect(result[6]).toBeCloseTo(0, 5);
+  });
+
+  it('composes TRS correctly', () => {
+    // T=[1,0,0], R=identity, S=[2,2,2]
+    const result = buildNodeLocalMatrix({
+      translation: [1, 0, 0],
+      rotation: [0, 0, 0, 1],
+      scale: [2, 2, 2],
+    });
+    expect(result[0]).toBeCloseTo(2);
+    expect(result[5]).toBeCloseTo(2);
+    expect(result[10]).toBeCloseTo(2);
+    expect(result[12]).toBe(1);
+    expect(result[13]).toBe(0);
+    expect(result[14]).toBe(0);
+    expect(result[15]).toBe(1);
+  });
+
+  it('loadGltf attaches localMatrix to every node', async () => {
+    const { json, bin } = triangleAsset();
+    // Node with no transform data at all
+    json.nodes = [
+      { name: 'NoTransform' },
+      { name: 'WithTranslation', translation: [1, 2, 3] },
+    ];
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.nodes[0].localMatrix).toEqual(IDENTITY);
+    expect(result.nodes[1].localMatrix).toBeDefined();
+    expect(result.nodes[1].localMatrix![12]).toBe(1);
+    expect(result.nodes[1].localMatrix![13]).toBe(2);
+    expect(result.nodes[1].localMatrix![14]).toBe(3);
   });
 });

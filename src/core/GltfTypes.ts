@@ -33,9 +33,17 @@ export interface GltfNode {
   name?: string;
   mesh?: number;
   children?: number[];
+  /** Column-major 4×4 local transform matrix (glTF §5.3.4). Mutually exclusive with TRS. */
+  matrix?: number[];
   translation?: [number, number, number];
   rotation?: [number, number, number, number];
   scale?: [number, number, number];
+  /**
+   * Computed column-major 4×4 local transform matrix injected by the loader.
+   * Derived from `matrix`, TRS properties, or the identity matrix when none
+   * of those fields are present on the node.
+   */
+  localMatrix?: number[];
 }
 
 // ---------------------------------------------------------------------------

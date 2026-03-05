@@ -20,11 +20,19 @@ export class Time {
   private origin: number = 0;
   private totalPausedMs: number = 0;
   private pausedAt: number | null = null;
+  /** True only when the current pause was initiated by the visibility handler. */
+  private pausedByVisibility = false;
 
   private readonly onVisibilityChange = (): void => {
     if (document.hidden) {
-      this.pause(performance.now());
-    } else {
+      // Only auto-pause when not already paused by user code; record the reason.
+      if (this.pausedAt === null) {
+        this.pausedByVisibility = true;
+        this.pause(performance.now());
+      }
+    } else if (this.pausedByVisibility) {
+      // Only auto-resume when the visibility handler was the one that paused.
+      this.pausedByVisibility = false;
       this.resume(performance.now());
     }
   };
@@ -86,5 +94,6 @@ export class Time {
     this.origin = 0;
     this.totalPausedMs = 0;
     this.pausedAt = null;
+    this.pausedByVisibility = false;
   }
 }

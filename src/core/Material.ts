@@ -156,7 +156,18 @@ export class Material {
 
   private createProgram(): WebGLProgram {
     const vs = createShader(this.gl, this.gl.VERTEX_SHADER, this.vertexSource);
-    const fs = createShader(this.gl, this.gl.FRAGMENT_SHADER, this.fragmentSource);
-    return createProgram(this.gl, vs, fs);
+    let fs: WebGLShader;
+    try {
+      fs = createShader(this.gl, this.gl.FRAGMENT_SHADER, this.fragmentSource);
+    } catch (e) {
+      this.gl.deleteShader(vs);
+      throw e;
+    }
+    try {
+      return createProgram(this.gl, vs, fs);
+    } finally {
+      this.gl.deleteShader(vs);
+      this.gl.deleteShader(fs);
+    }
   }
 }

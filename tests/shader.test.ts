@@ -456,10 +456,45 @@ describe('Material', () => {
     expect(calls.length).toBe(1);
   });
 
+  it('deletes intermediate shaders immediately after linking to prevent GPU memory leaks', () => {
+    const mat = new Material(gl);
+    expect(mat.program).toBeDefined();
+    // Both the vertex and fragment shader objects must be deleted right after
+    // the program is linked so they are freed when the program is later deleted.
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+  });
+
   it('dispose deletes the program', () => {
     const mat = new Material(gl);
     mat.dispose();
     expect(gl.deleteProgram).toHaveBeenCalledWith(mat.program);
+  });
+
+  it('deletes vertex shader when fragment shader compilation fails', () => {
+    let shaderCallCount = 0;
+    gl = createMockGL({
+      getShaderParameter: vi.fn(() => {
+        shaderCallCount++;
+        // vertex (odd calls) succeeds; fragment (even calls) fails
+        return shaderCallCount % 2 === 1;
+      }),
+      getShaderInfoLog: vi.fn(() => 'frag error'),
+    });
+
+    expect(() => new Material(gl, 'vert', 'bad-frag')).toThrow(/Failed to compile fragment shader/);
+    // createShader deletes the bad fragment shader; Material must delete the vertex shader
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+  });
+
+  it('deletes both shaders when program linking fails', () => {
+    gl = createMockGL({
+      getProgramParameter: vi.fn(() => false),
+      getProgramInfoLog: vi.fn(() => 'link error'),
+    });
+
+    expect(() => new Material(gl, 'vert', 'frag')).toThrow(/Failed to link shader program/);
+    // createProgram deletes the failed program; Material must delete both shaders
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
   });
 
   it('restore rebuilds program and clears uniform cache', () => {

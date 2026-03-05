@@ -9,6 +9,8 @@ import type {
   GltfAsset,
   GltfAccessor,
   GltfBufferView,
+  GltfNode,
+  GltfNodeWithMatrix,
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
@@ -71,7 +73,7 @@ export async function loadGltf(
     }
   }
 
-  return { meshes, nodes: json.nodes ?? [] };
+  return { meshes, nodes: (json.nodes ?? []).map(attachLocalMatrix) };
 }
 
 // ---------------------------------------------------------------------------
@@ -231,6 +233,81 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
     if (fetchFailure) (decodeError as Error & { cause?: Error }).cause = fetchFailure;
     throw decodeError;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Node local-matrix helpers
+// ---------------------------------------------------------------------------
+
+/** Column-major 4×4 identity matrix. */
+const IDENTITY_MAT4: readonly number[] = [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1,
+];
+
+/**
+ * Compute the column-major 4×4 local transform matrix for a glTF node.
+ *
+ * Priority (per glTF 2.0 §5.3.4):
+ *  1. `node.matrix` – used verbatim when exactly 16 elements are present.
+ *  2. TRS components – composed as T × R × S with identity defaults for any
+ *     missing component (`translation` → [0,0,0], `rotation` → [0,0,0,1],
+ *     `scale` → [1,1,1]).
+ *  3. Neither present – returns the identity matrix.
+ */
+export function buildNodeLocalMatrix(node: GltfNode): number[] {
+  // 1. Explicit matrix
+  if (node.matrix && node.matrix.length === 16) {
+    return node.matrix.slice();
+  }
+
+  // 3. No transform data at all → identity
+  if (!node.translation && !node.rotation && !node.scale) {
+    return IDENTITY_MAT4.slice();
+  }
+
+  // 2. TRS composition (with identity defaults)
+  const tx = node.translation?.[0] ?? 0;
+  const ty = node.translation?.[1] ?? 0;
+  const tz = node.translation?.[2] ?? 0;
+
+  const qx = node.rotation?.[0] ?? 0;
+  const qy = node.rotation?.[1] ?? 0;
+  const qz = node.rotation?.[2] ?? 0;
+  const qw = node.rotation?.[3] ?? 1;
+
+  const sx = node.scale?.[0] ?? 1;
+  const sy = node.scale?.[1] ?? 1;
+  const sz = node.scale?.[2] ?? 1;
+
+  // Pre-compute quaternion products
+  const x2 = qx + qx;
+  const y2 = qy + qy;
+  const z2 = qz + qz;
+  const xx = qx * x2;
+  const xy = qx * y2;
+  const xz = qx * z2;
+  const yy = qy * y2;
+  const yz = qy * z2;
+  const zz = qz * z2;
+  const wx = qw * x2;
+  const wy = qw * y2;
+  const wz = qw * z2;
+
+  // Column-major layout (each group of 4 values is one column)
+  return [
+    (1 - (yy + zz)) * sx, (xy + wz) * sx, (xz - wy) * sx, 0,
+    (xy - wz) * sy, (1 - (xx + zz)) * sy, (yz + wx) * sy, 0,
+    (xz + wy) * sz, (yz - wx) * sz, (1 - (xx + yy)) * sz, 0,
+    tx, ty, tz, 1,
+  ];
+}
+
+/** Return a shallow copy of `node` with `localMatrix` attached. */
+function attachLocalMatrix(node: GltfNode): GltfNodeWithMatrix {
+  return { ...node, localMatrix: buildNodeLocalMatrix(node) };
 }
 
 // ---------------------------------------------------------------------------

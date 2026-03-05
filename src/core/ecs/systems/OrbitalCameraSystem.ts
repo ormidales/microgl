@@ -41,6 +41,14 @@ export class OrbitalCameraSystem extends System {
   /** Maximum allowed orbit radius. */
   public maxRadius: number = 100;
 
+  /**
+   * Maximum elevation angle in degrees (applied symmetrically above and below
+   * the equatorial plane).  Keeping this value strictly below 90° prevents the
+   * camera from reaching the zenith / nadir poles where the `lookAt` up-vector
+   * becomes undefined and causes a sudden axis flip or jitter.
+   */
+  public maxElevationDeg: number = 89.9;
+
   // ---- Internal state -------------------------------------------------------
 
   private canvas: HTMLCanvasElement | null = null;
@@ -136,9 +144,12 @@ export class OrbitalCameraSystem extends System {
       cam.phi += this.deltaPhi;
       cam.radius += this.deltaZoom;
 
-      // Clamp phi to avoid flipping (small epsilon away from poles)
-      const EPS = 0.0001;
-      cam.phi = Math.max(EPS, Math.min(Math.PI - EPS, cam.phi));
+      // Clamp phi to avoid flipping at the poles.
+      // phi is the polar angle from the north pole; elevation = 90° − phi (in degrees).
+      // Restricting elevation to [−maxElevationDeg, +maxElevationDeg] keeps the
+      // lookAt up-vector well-defined and prevents gimbal flip or camera jitter.
+      const phiMin = (90 - this.maxElevationDeg) * (Math.PI / 180);
+      cam.phi = Math.max(phiMin, Math.min(Math.PI - phiMin, cam.phi));
 
       // Clamp radius
       cam.radius = Math.max(this.minRadius, Math.min(this.maxRadius, cam.radius));

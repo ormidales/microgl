@@ -1026,8 +1026,11 @@ describe('OrbitalCameraSystem', () => {
     const sys = new OrbitalCameraSystem();
     sys.update(em, 0.016);
 
-    expect(cam.phi).toBeGreaterThan(0);
-    expect(cam.phi).toBeLessThan(Math.PI);
+    // phi must stay within (0, π) and be at least 0.1° away from both poles
+    // (corresponding to the default ±89.9° elevation limit)
+    const phiMin = (90 - sys.maxElevationDeg) * (Math.PI / 180);
+    expect(cam.phi).toBeGreaterThanOrEqual(phiMin);
+    expect(cam.phi).toBeLessThanOrEqual(Math.PI - phiMin);
   });
 
   it('clamps radius within bounds', () => {

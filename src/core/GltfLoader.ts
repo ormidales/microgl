@@ -11,6 +11,7 @@ import type {
   GltfBufferView,
   GltfNode,
   GltfNodeWithMatrix,
+  GltfMaterial,
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
@@ -353,17 +354,48 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const min = positionAccessor?.min ?? computedBounds?.min ?? [];
       const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
-      result.push({ name, positions, normals, uvs, indices, min, max });
+      const baseColorTextureIndex = extractBaseColorTextureIndex(json, prim.material, prim.attributes['TEXCOORD_0'], name, pi);
+
+      result.push({ name, positions, normals, uvs, indices, min, max, baseColorTextureIndex });
     }
   }
 
   return result;
 }
 
+
 /**
- * Normalize each VEC3 normal in-place. Vectors with zero length are left
- * unchanged to avoid NaN values in degenerate geometry.
+ * Resolve the base-colour texture index for a primitive's material.
+ *
+ * If the material references a base-colour texture but the primitive does not
+ * carry `TEXCOORD_0`, a warning is emitted and `undefined` is returned so that
+ * the loading sequence continues without interruption.
  */
+function extractBaseColorTextureIndex(
+  json: GltfAsset,
+  materialIndex: number | undefined,
+  texcoord0: number | undefined,
+  meshName: string,
+  primitiveIndex: number,
+): number | undefined {
+  if (materialIndex === undefined) return undefined;
+
+  const material: GltfMaterial | undefined = json.materials?.[materialIndex];
+  const texInfo = material?.pbrMetallicRoughness?.baseColorTexture;
+  if (texInfo === undefined) return undefined;
+
+  if (texcoord0 === undefined) {
+    console.warn(
+      `[GltfLoader] Mesh "${meshName}" primitive ${primitiveIndex}: ` +
+      `material ${materialIndex} references a base-colour texture but TEXCOORD_0 is absent – ` +
+      `texture will be skipped.`,
+    );
+    return undefined;
+  }
+
+  return texInfo.index;
+}
+
 function normalizeNormalArray(normals: Float32Array): void {
   for (let i = 0; i + 2 < normals.length; i += 3) {
     const x = normals[i];

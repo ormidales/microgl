@@ -988,6 +988,158 @@ describe('loadGltf', () => {
     // Already-unit normal (0,0,1) stays unchanged
     expect(n[5]).toBeCloseTo(1, 5);
   });
+
+  it('sets baseColorTextureIndex when material has a base-colour texture and TEXCOORD_0 is present', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const uvs = new Float32Array([0, 0, 1, 0, 0, 1]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 24 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(uvs.buffer as ArrayBuffer), 36);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 60);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{
+        name: 'TexturedMesh',
+        primitives: [{
+          attributes: { POSITION: 0, TEXCOORD_0: 1 },
+          indices: 2,
+          material: 0,
+        }],
+      }],
+      materials: [{
+        pbrMetallicRoughness: {
+          baseColorTexture: { index: 0 },
+        },
+      }],
+      textures: [{ source: 0 }],
+      images: [{ uri: 'texture.png' }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_FLOAT, count: 3, type: 'VEC2' },
+        { bufferView: 2, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 24 },
+        { buffer: 0, byteOffset: 60, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes).toHaveLength(1);
+    expect(result.meshes[0].baseColorTextureIndex).toBe(0);
+    expect(result.meshes[0].uvs.length).toBe(6);
+  });
+
+  it('warns and skips baseColorTextureIndex when material has a texture but TEXCOORD_0 is absent', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 36);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{
+        name: 'NoUVMesh',
+        primitives: [{
+          attributes: { POSITION: 0 },
+          indices: 1,
+          material: 0,
+        }],
+      }],
+      materials: [{
+        pbrMetallicRoughness: {
+          baseColorTexture: { index: 0 },
+        },
+      }],
+      textures: [{ source: 0 }],
+      images: [{ uri: 'texture.png' }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const glb = buildGlb(json, bin);
+      const result = await loadGltf(glb);
+
+      expect(result.meshes).toHaveLength(1);
+      expect(result.meshes[0].baseColorTextureIndex).toBeUndefined();
+      expect(result.meshes[0].uvs.length).toBe(0);
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy.mock.calls[0][0]).toMatch(/TEXCOORD_0 is absent/);
+      expect(warnSpy.mock.calls[0][0]).toMatch(/NoUVMesh/);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('does not set baseColorTextureIndex when primitive has no material', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ byteLength: bin.byteLength }];
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].baseColorTextureIndex).toBeUndefined();
+  });
+
+  it('does not set baseColorTextureIndex when material has no base-colour texture', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const indices = new Uint16Array([0, 1, 2]);
+
+    const totalBytes = 36 + 6;
+    const bin = new ArrayBuffer(totalBytes);
+    const u8 = new Uint8Array(bin);
+    u8.set(new Uint8Array(positions.buffer as ArrayBuffer), 0);
+    u8.set(new Uint8Array(indices.buffer as ArrayBuffer), 36);
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{
+        name: 'UnlitMesh',
+        primitives: [{
+          attributes: { POSITION: 0 },
+          indices: 1,
+          material: 0,
+        }],
+      }],
+      materials: [{ pbrMetallicRoughness: { baseColorFactor: [1, 0, 0, 1] } }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+        { bufferView: 1, componentType: GL_UNSIGNED_SHORT, count: 3, type: 'SCALAR' },
+      ],
+      bufferViews: [
+        { buffer: 0, byteOffset: 0, byteLength: 36 },
+        { buffer: 0, byteOffset: 36, byteLength: 6 },
+      ],
+      buffers: [{ byteLength: totalBytes }],
+    };
+
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+
+    expect(result.meshes[0].baseColorTextureIndex).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,10 @@
 /**
  * Tracks elapsed time and per-frame delta time.
+ *
+ * When constructed in a browser context, automatically listens for
+ * `document.visibilitychange` to pause/resume the elapsed clock whenever the
+ * user switches tabs. Call {@link dispose} to remove the listener when the
+ * render loop is torn down.
  */
 export class Time {
   private static readonly DEFAULT_MAX_DELTA_TIME_SECONDS = 0.1;
@@ -16,8 +21,26 @@ export class Time {
   private totalPausedMs: number = 0;
   private pausedAt: number | null = null;
 
+  private readonly onVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.pause(performance.now());
+    } else {
+      this.resume(performance.now());
+    }
+  };
+
   constructor(maxDeltaTimeSeconds = Time.DEFAULT_MAX_DELTA_TIME_SECONDS) {
     this.maxDeltaTimeSeconds = maxDeltaTimeSeconds;
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibilityChange);
+    }
+  }
+
+  /** Remove the `visibilitychange` listener registered in the constructor. */
+  dispose(): void {
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
+    }
   }
 
   /** Call once at the start of each frame with the rAF timestamp (ms). */

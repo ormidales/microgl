@@ -6,6 +6,7 @@ export class Renderer {
   public gl: WebGL2RenderingContext;
 
   private resizeObserver: ResizeObserver | null;
+  private dprMediaQuery: MediaQueryList | null = null;
   private readonly container: HTMLElement;
   private readonly contextAttributes?: WebGLContextAttributes;
   private readonly contextLostHandlers: Set<() => void> = new Set();
@@ -32,6 +33,8 @@ export class Renderer {
 
     this.resizeObserver = new ResizeObserver((entries) => this.resizeViewport(entries[0]));
     this.resizeObserver.observe(this.container);
+
+    this.observeDevicePixelRatio();
   }
 
   /** Synchronize the drawing buffer size with the canvas CSS size. */
@@ -70,11 +73,31 @@ export class Renderer {
     return () => this.contextRestoredHandlers.delete(handler);
   }
 
+  /**
+   * Subscribe to future devicePixelRatio changes via a matchMedia query so that
+   * the viewport is recalculated whenever the window moves to a screen with a
+   * different pixel density.
+   */
+  private observeDevicePixelRatio(): void {
+    this.dprMediaQuery?.removeEventListener('change', this.handleDprChange);
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      this.dprMediaQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+      this.dprMediaQuery.addEventListener('change', this.handleDprChange, { once: true });
+    }
+  }
+
+  private readonly handleDprChange = (): void => {
+    this.resizeViewport();
+    this.observeDevicePixelRatio();
+  };
+
   /** Stop observing resize events and remove the canvas. */
   dispose(): void {
     this.resizeObserver?.unobserve(this.container);
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    this.dprMediaQuery?.removeEventListener('change', this.handleDprChange);
+    this.dprMediaQuery = null;
     this.canvas.removeEventListener('webglcontextlost', this.handleContextLost as EventListener);
     this.canvas.removeEventListener('webglcontextrestored', this.handleContextRestored as EventListener);
     this.contextLostHandlers.clear();

@@ -250,12 +250,12 @@ const IDENTITY_MAT4: readonly number[] = [
 /**
  * Compute the column-major 4×4 local transform matrix for a glTF node.
  *
- * Priority (per glTF 2.0 §5.3.4):
+ * Execution order (per glTF 2.0 §5.3.4):
  *  1. `node.matrix` – used verbatim when exactly 16 elements are present.
- *  2. TRS components – composed as T × R × S with identity defaults for any
+ *  2. No transform data at all – returns the identity matrix early.
+ *  3. TRS components – composed as T × R × S with identity defaults for any
  *     missing component (`translation` → [0,0,0], `rotation` → [0,0,0,1],
  *     `scale` → [1,1,1]).
- *  3. Neither present – returns the identity matrix.
  */
 export function buildNodeLocalMatrix(node: GltfNode): number[] {
   // 1. Explicit matrix
@@ -263,12 +263,12 @@ export function buildNodeLocalMatrix(node: GltfNode): number[] {
     return node.matrix.slice();
   }
 
-  // 3. No transform data at all → identity
+  // 2. No transform data at all → identity
   if (!node.translation && !node.rotation && !node.scale) {
     return IDENTITY_MAT4.slice();
   }
 
-  // 2. TRS composition (with identity defaults)
+  // 3. TRS composition (with identity defaults)
   const tx = node.translation?.[0] ?? 0;
   const ty = node.translation?.[1] ?? 0;
   const tz = node.translation?.[2] ?? 0;

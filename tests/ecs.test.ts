@@ -6,7 +6,7 @@ import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 import { CameraComponent } from '../src/core/ecs/components/CameraComponent';
 import { RenderSystem } from '../src/core/ecs/systems/RenderSystem';
 import { OrbitalCameraSystem } from '../src/core/ecs/systems/OrbitalCameraSystem';
-import { mat4, vec3 } from 'gl-matrix';
+import { mat4, quat, vec3 } from 'gl-matrix';
 
 // ---------------------------------------------------------------------------
 // EntityManager
@@ -382,6 +382,25 @@ describe('TransformComponent', () => {
     expect(t.scaleX).toBe(1);
   });
 
+  it('rotation defaults to the identity quaternion', () => {
+    const t = new TransformComponent();
+    expect(t.rotation).toEqual([0, 0, 0, 1]);
+  });
+
+  it('accepts a custom quaternion in the constructor', () => {
+    const q: [number, number, number, number] = [0.1, 0.2, 0.3, 0.9];
+    const t = new TransformComponent(0, 0, 0, q);
+    expect(t.rotation).toEqual([0.1, 0.2, 0.3, 0.9]);
+  });
+
+  it('needsModelMatrixUpdate detects changes to rotation quaternion components', () => {
+    const t = new TransformComponent();
+    t.markModelMatrixClean();
+    expect(t.needsModelMatrixUpdate()).toBe(false);
+    t.rotation[1] = 0.5; // mutate Y component
+    expect(t.needsModelMatrixUpdate()).toBe(true);
+  });
+
   it('needsModelMatrixUpdate returns true initially', () => {
     const t = new TransformComponent();
     expect(t.needsModelMatrixUpdate()).toBe(true);
@@ -522,10 +541,12 @@ describe('RenderSystem', () => {
     expect(gl.drawArrays).toHaveBeenCalledWith(gl.TRIANGLES, 0, 3);
   });
 
-  it('computes the same model matrix as sequential TRS operations', () => {
+  it('computes the correct model matrix from a quaternion rotation', () => {
     const em = new EntityManager();
     const id = em.createEntity();
-    em.addComponent(id, new TransformComponent(1, -2, 3, 0.4, -0.7, 1.1, 2, 3, 4));
+    const q = quat.fromEuler(quat.create(), 23, -40, 63, 'xyz');
+    const rotation: [number, number, number, number] = [q[0], q[1], q[2], q[3]];
+    em.addComponent(id, new TransformComponent(1, -2, 3, rotation, 2, 3, 4));
     em.addComponent(
       id,
       new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
@@ -540,11 +561,12 @@ describe('RenderSystem', () => {
     expect(modelCall).toBeDefined();
 
     const expectedModel = mat4.create();
-    mat4.translate(expectedModel, expectedModel, vec3.fromValues(1, -2, 3));
-    mat4.rotateX(expectedModel, expectedModel, 0.4);
-    mat4.rotateY(expectedModel, expectedModel, -0.7);
-    mat4.rotateZ(expectedModel, expectedModel, 1.1);
-    mat4.scale(expectedModel, expectedModel, vec3.fromValues(2, 3, 4));
+    mat4.fromRotationTranslationScale(
+      expectedModel,
+      q,
+      vec3.fromValues(1, -2, 3),
+      vec3.fromValues(2, 3, 4),
+    );
 
     const modelMatrix = modelCall?.[1];
     expect(modelMatrix).toBeInstanceOf(Float32Array);
@@ -556,7 +578,7 @@ describe('RenderSystem', () => {
   it('does not recompute model matrix for unchanged transforms', () => {
     const em = new EntityManager();
     const id = em.createEntity();
-    em.addComponent(id, new TransformComponent(1, 2, 3, 0.1, 0.2, 0.3, 2, 2, 2));
+    em.addComponent(id, new TransformComponent(1, 2, 3, [0, 0, 0, 1], 2, 2, 2));
     em.addComponent(
       id,
       new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),

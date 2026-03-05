@@ -132,8 +132,11 @@ export interface ParsedMesh {
   max: number[];
 }
 
+/** A `GltfNode` with a guaranteed `localMatrix` as injected by `loadGltf`. */
+export type GltfNodeWithMatrix = GltfNode & { localMatrix: number[] };
+
 /** Result of loading and parsing an entire glTF asset. */
 export interface GltfLoadResult {
   meshes: ParsedMesh[];
-  nodes: GltfNode[];
+  nodes: GltfNodeWithMatrix[];
 }

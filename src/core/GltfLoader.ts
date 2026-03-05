@@ -10,6 +10,7 @@ import type {
   GltfAccessor,
   GltfBufferView,
   GltfNode,
+  GltfNodeWithMatrix,
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
@@ -305,7 +306,7 @@ export function buildNodeLocalMatrix(node: GltfNode): number[] {
 }
 
 /** Return a shallow copy of `node` with `localMatrix` attached. */
-function attachLocalMatrix(node: GltfNode): GltfNode {
+function attachLocalMatrix(node: GltfNode): GltfNodeWithMatrix {
   return { ...node, localMatrix: buildNodeLocalMatrix(node) };
 }
 

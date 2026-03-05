@@ -1123,8 +1123,8 @@ describe('buildNodeLocalMatrix', () => {
 
     expect(result.nodes[0].localMatrix).toEqual(IDENTITY);
     expect(result.nodes[1].localMatrix).toBeDefined();
-    expect(result.nodes[1].localMatrix![12]).toBe(1);
-    expect(result.nodes[1].localMatrix![13]).toBe(2);
-    expect(result.nodes[1].localMatrix![14]).toBe(3);
+    expect(result.nodes[1].localMatrix[12]).toBe(1);
+    expect(result.nodes[1].localMatrix[13]).toBe(2);
+    expect(result.nodes[1].localMatrix[14]).toBe(3);
   });
 });

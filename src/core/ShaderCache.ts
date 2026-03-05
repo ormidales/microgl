@@ -87,9 +87,34 @@ export class ShaderCache {
 
     const vertexShaderKey = vertexSource;
     const fragmentShaderKey = fragmentSource;
-    const vs = this.getShader(this.gl.VERTEX_SHADER, vertexSource, vertexShaderKey);
-    const fs = this.getShader(this.gl.FRAGMENT_SHADER, fragmentSource, fragmentShaderKey);
-    const program = createProgram(this.gl, vs, fs);
+    const vsPreExisted = this.shaders.has(vertexShaderKey);
+    const fsPreExisted = this.shaders.has(fragmentShaderKey);
+    let vs: WebGLShader;
+    let fs: WebGLShader;
+    let program: WebGLProgram;
+    try {
+      vs = this.getShader(this.gl.VERTEX_SHADER, vertexSource, vertexShaderKey);
+      fs = this.getShader(this.gl.FRAGMENT_SHADER, fragmentSource, fragmentShaderKey);
+      program = createProgram(this.gl, vs, fs);
+    } catch (e) {
+      // Evict any shaders that were newly added to the cache during this failed
+      // attempt so that their WebGL objects are released immediately.
+      if (!vsPreExisted) {
+        const shader = this.shaders.get(vertexShaderKey);
+        if (shader) {
+          this.gl.deleteShader(shader);
+          this.shaders.delete(vertexShaderKey);
+        }
+      }
+      if (!fsPreExisted) {
+        const shader = this.shaders.get(fragmentShaderKey);
+        if (shader) {
+          this.gl.deleteShader(shader);
+          this.shaders.delete(fragmentShaderKey);
+        }
+      }
+      throw e;
+    }
     this.programs.set(cacheKey, program);
     this.programShaders.set(cacheKey, [vertexShaderKey, fragmentShaderKey]);
     if (combinedSource !== undefined) {

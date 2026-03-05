@@ -12,6 +12,7 @@ import type {
   GltfNode,
   GltfNodeWithMatrix,
   GltfMaterial,
+  GltfPrimitiveAttributeSemantic,
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
@@ -354,7 +355,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const min = positionAccessor?.min ?? computedBounds?.min ?? [];
       const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
-      const baseColorTextureIndex = extractBaseColorTextureIndex(json, prim.material, prim.attributes['TEXCOORD_0'], name, pi);
+      const baseColorTextureIndex = extractBaseColorTextureIndex(json, prim.material, prim.attributes, name, pi);
 
       result.push({ name, positions, normals, uvs, indices, min, max, baseColorTextureIndex });
     }
@@ -365,16 +366,17 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
 
 
 /**
- * Resolve the base-colour texture index for a primitive's material.
+ * Resolve the base-color texture index for a primitive's material.
  *
- * If the material references a base-colour texture but the primitive does not
- * carry `TEXCOORD_0`, a warning is emitted and `undefined` is returned so that
- * the loading sequence continues without interruption.
+ * Respects `baseColorTexture.texCoord` (glTF default: 0) to select the
+ * correct `TEXCOORD_N` UV set.  If the required attribute is absent a warning
+ * is emitted and `undefined` is returned so that loading continues without
+ * interruption.
  */
 function extractBaseColorTextureIndex(
   json: GltfAsset,
   materialIndex: number | undefined,
-  texcoord0: number | undefined,
+  attributes: Partial<Record<GltfPrimitiveAttributeSemantic, number>>,
   meshName: string,
   primitiveIndex: number,
 ): number | undefined {
@@ -384,11 +386,15 @@ function extractBaseColorTextureIndex(
   const texInfo = material?.pbrMetallicRoughness?.baseColorTexture;
   if (texInfo === undefined) return undefined;
 
-  if (texcoord0 === undefined) {
+  const uvSetIndex = texInfo.texCoord ?? 0;
+  const texcoordKey = `TEXCOORD_${uvSetIndex}` as GltfPrimitiveAttributeSemantic;
+  const texcoordAccessorIndex = attributes[texcoordKey];
+
+  if (texcoordAccessorIndex === undefined) {
     console.warn(
       `[GltfLoader] Mesh "${meshName}" primitive ${primitiveIndex}: ` +
-      `material ${materialIndex} references a base-colour texture but TEXCOORD_0 is absent – ` +
-      `texture will be skipped.`,
+      `material ${materialIndex} references a base-color texture using TEXCOORD_${uvSetIndex} ` +
+      `but that attribute is absent – texture will be skipped.`,
     );
     return undefined;
   }

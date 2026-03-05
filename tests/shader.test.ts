@@ -257,6 +257,91 @@ describe('ShaderCache', () => {
     expect(gl.deleteShader).not.toHaveBeenCalled();
   });
 
+  it('does not cache vertex or fragment shader when vertex compilation fails', () => {
+    // Vertex shader compilation always fails; fragment never reached.
+    gl = createMockGL({
+      getShaderParameter: vi.fn(() => false),
+      getShaderInfoLog: vi.fn(() => 'vert error'),
+    });
+    cache = new ShaderCache(gl);
+
+    expect(() => cache.getProgram('bad-vert', 'frag')).toThrow(/Failed to compile vertex shader/);
+
+    // The bad vertex shader object should have been deleted by createShader.
+    expect(gl.deleteShader).toHaveBeenCalled();
+    // Neither shader should remain in the cache.
+    expect(gl.createProgram).not.toHaveBeenCalled();
+  });
+
+  it('evicts newly-cached vertex shader when fragment compilation fails', () => {
+    let shaderCallCount = 0;
+    // Odd-numbered calls (vertex shaders) succeed; even-numbered calls (fragment shaders) fail.
+    gl = createMockGL({
+      getShaderParameter: vi.fn(() => {
+        shaderCallCount++;
+        return shaderCallCount % 2 === 1;
+      }),
+      getShaderInfoLog: vi.fn(() => 'frag error'),
+    });
+    cache = new ShaderCache(gl);
+
+    expect(() => cache.getProgram('vert', 'bad-frag')).toThrow(/Failed to compile fragment shader/);
+
+    // One deletion by createShader (bad frag) + one by ShaderCache cleanup (newly-cached vert).
+    expect((gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+    // No program should have been created.
+    expect(gl.createProgram).not.toHaveBeenCalled();
+
+    // Calling getProgram again for the same vertex shader must recompile it (cache was cleared).
+    expect(() => cache.getProgram('vert', 'bad-frag')).toThrow();
+    expect(gl.createShader).toHaveBeenCalledTimes(4); // 2 attempts × (1 vert + 1 frag)
+  });
+
+  it('does not evict pre-existing vertex shader when fragment compilation fails', () => {
+    let shaderParamCallCount = 0;
+    gl = createMockGL({
+      // First call (pre-populate vertex) succeeds; subsequent calls (fragment in getProgram) fail.
+      getShaderParameter: vi.fn(() => {
+        shaderParamCallCount++;
+        return shaderParamCallCount === 1;
+      }),
+      getShaderInfoLog: vi.fn(() => 'frag error'),
+    });
+    cache = new ShaderCache(gl);
+
+    // Pre-populate the vertex shader cache.
+    const preExistingVs = cache.getShader(gl.VERTEX_SHADER, 'vert');
+
+    const deleteShaderBefore = (gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    expect(() => cache.getProgram('vert', 'bad-frag')).toThrow(/Failed to compile fragment shader/);
+
+    const deleteShaderAfter = (gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.length;
+    // Only the bad fragment shader should have been deleted (by createShader), not the pre-existing vertex.
+    expect(deleteShaderAfter - deleteShaderBefore).toBe(1);
+    // The pre-existing vertex shader should still be in the cache (reused without recompile).
+    expect(cache.getShader(gl.VERTEX_SHADER, 'vert')).toBe(preExistingVs);
+    expect(gl.createShader).toHaveBeenCalledTimes(2); // 1 initial getShader + 1 failed frag attempt
+  });
+
+  it('evicts both newly-cached shaders when program linking fails', () => {
+    gl = createMockGL({
+      getProgramParameter: vi.fn(() => false),
+      getProgramInfoLog: vi.fn(() => 'link error'),
+    });
+    cache = new ShaderCache(gl);
+
+    expect(() => cache.getProgram('vert', 'frag')).toThrow(/Failed to link shader program/);
+
+    // createProgram already deletes the program; ShaderCache must additionally evict both shaders.
+    expect(gl.deleteProgram).toHaveBeenCalled();
+    expect((gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2);
+
+    // Both shaders must be re-created on the next attempt (cache was cleared).
+    expect(() => cache.getProgram('vert', 'frag')).toThrow(/Failed to link shader program/);
+    expect(gl.createShader).toHaveBeenCalledTimes(4); // 2 attempts × 2 shaders
+  });
+
   it('returns distinct programs when two source pairs produce the same FNV-1a hash (collision)', () => {
     let programId = 0;
     (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(

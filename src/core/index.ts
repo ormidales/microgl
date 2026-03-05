@@ -12,6 +12,7 @@ export type { GltfLoaderOptions } from './GltfLoader';
 export type {
   GltfAsset,
   GltfNode,
+  GltfNodeWithMatrix,
   GltfMesh,
   ParsedMesh,
   GltfLoadResult,

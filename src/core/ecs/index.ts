@@ -1,6 +1,6 @@
 export { EntityManager } from './EntityManager';
 export { System } from './System';
-export type { EntityId, Component } from './types';
+export type { EntityId, Component, Quaternion } from './types';
 export { TransformComponent } from './components/TransformComponent';
 export { MeshComponent } from './components/MeshComponent';
 export { CameraComponent } from './components/CameraComponent';

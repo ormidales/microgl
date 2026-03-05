@@ -58,7 +58,7 @@ export function runCameraDemo(): void {
   for (let gx = -GRID_RADIUS; gx <= GRID_RADIUS; gx++) {
     for (let gz = -GRID_RADIUS; gz <= GRID_RADIUS; gz++) {
       const cube = em.createEntity();
-      em.addComponent(cube, new TransformComponent(gx * GRID_SPACING, 0, gz * GRID_SPACING, 0, 0, 0, 0.7, 0.7, 0.7));
+      em.addComponent(cube, new TransformComponent(gx * GRID_SPACING, 0, gz * GRID_SPACING, [0, 0, 0, 1], 0.7, 0.7, 0.7));
       em.addComponent(cube, new MeshComponent(cubeVertices));
     }
   }

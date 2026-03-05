@@ -10,6 +10,7 @@ import {
   System,
   TransformComponent,
 } from '../core/ecs';
+import { quat } from 'gl-matrix';
 
 const ENTITY_GRID_SIZE = 100;
 const ENTITY_SPACING = 0.45;
@@ -31,7 +32,7 @@ class StressMovementSystem extends System {
       const col = i % ENTITY_GRID_SIZE;
       const row = Math.floor(i / ENTITY_GRID_SIZE);
       transform.y = Math.sin(this.phase + (col + row) * POSITION_OFFSET_STEP) * MOVE_AMPLITUDE;
-      transform.rotationY += deltaTime * TURN_SPEED;
+      quat.rotateY(transform.rotation, transform.rotation, deltaTime * TURN_SPEED);
     }
   }
 }

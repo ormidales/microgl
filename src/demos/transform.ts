@@ -11,12 +11,15 @@ import {
   System,
   TransformComponent,
 } from '../core/ecs';
+import { quat } from 'gl-matrix';
 
 const ROTATION_X_SPEED = 1;
 const ROTATION_Y_SPEED = 1.4;
 
 class RotateCubeSystem extends System {
   public readonly requiredComponents = ['Transform'] as const;
+  private accRotationX = 0;
+  private accRotationY = 0;
 
   constructor(
     private readonly rotationXValue: HTMLOutputElement,
@@ -26,14 +29,16 @@ class RotateCubeSystem extends System {
   }
 
   update(em: EntityManager, deltaTime: number): void {
+    this.accRotationX += deltaTime * ROTATION_X_SPEED;
+    this.accRotationY += deltaTime * ROTATION_Y_SPEED;
+    this.rotationXValue.textContent = this.accRotationX.toFixed(2);
+    this.rotationYValue.textContent = this.accRotationY.toFixed(2);
     const entities = em.getEntitiesWith(...this.requiredComponents);
     for (const id of entities) {
       const transform = em.getComponent<TransformComponent>(id, 'Transform');
       if (!transform) continue;
-      transform.rotationX += deltaTime * ROTATION_X_SPEED;
-      transform.rotationY += deltaTime * ROTATION_Y_SPEED;
-      this.rotationXValue.textContent = transform.rotationX.toFixed(2);
-      this.rotationYValue.textContent = transform.rotationY.toFixed(2);
+      quat.rotateX(transform.rotation, transform.rotation, deltaTime * ROTATION_X_SPEED);
+      quat.rotateY(transform.rotation, transform.rotation, deltaTime * ROTATION_Y_SPEED);
     }
   }
 }

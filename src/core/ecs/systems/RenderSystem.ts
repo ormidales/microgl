@@ -196,12 +196,12 @@ export class RenderSystem extends System {
       if (transform.needsModelMatrixUpdate()) {
         vec3.set(this.translation, transform.x, transform.y, transform.z);
         vec3.set(this.scale, transform.scaleX, transform.scaleY, transform.scaleZ);
-        quat.fromEuler(
+        quat.set(
           this.rotation,
-          transform.rotationX * (180 / Math.PI),
-          transform.rotationY * (180 / Math.PI),
-          transform.rotationZ * (180 / Math.PI),
-          'xyz',
+          transform.rotation[0],
+          transform.rotation[1],
+          transform.rotation[2],
+          transform.rotation[3],
         );
         mat4.fromRotationTranslationScale(
           transform.modelMatrix,

@@ -11,6 +11,8 @@ import type {
   GltfBufferView,
   GltfNode,
   GltfNodeWithMatrix,
+  GltfMaterial,
+  GltfPrimitiveAttributeSemantic,
   ParsedMesh,
   GltfLoadResult,
 } from './GltfTypes';
@@ -353,17 +355,53 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const min = positionAccessor?.min ?? computedBounds?.min ?? [];
       const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
-      result.push({ name, positions, normals, uvs, indices, min, max });
+      const baseColorTextureIndex = extractBaseColorTextureIndex(json, prim.material, prim.attributes, name, pi);
+
+      result.push({ name, positions, normals, uvs, indices, min, max, baseColorTextureIndex });
     }
   }
 
   return result;
 }
 
+
 /**
- * Normalize each VEC3 normal in-place. Vectors with zero length are left
- * unchanged to avoid NaN values in degenerate geometry.
+ * Resolve the base-color texture index for a primitive's material.
+ *
+ * Respects `baseColorTexture.texCoord` (glTF default: 0) to select the
+ * correct `TEXCOORD_N` UV set.  If the required attribute is absent a warning
+ * is emitted and `undefined` is returned so that loading continues without
+ * interruption.
  */
+function extractBaseColorTextureIndex(
+  json: GltfAsset,
+  materialIndex: number | undefined,
+  attributes: Partial<Record<GltfPrimitiveAttributeSemantic, number>>,
+  meshName: string,
+  primitiveIndex: number,
+): number | undefined {
+  if (materialIndex === undefined) return undefined;
+
+  const material: GltfMaterial | undefined = json.materials?.[materialIndex];
+  const texInfo = material?.pbrMetallicRoughness?.baseColorTexture;
+  if (texInfo === undefined) return undefined;
+
+  const uvSetIndex = texInfo.texCoord ?? 0;
+  const texcoordKey = `TEXCOORD_${uvSetIndex}` as GltfPrimitiveAttributeSemantic;
+  const texcoordAccessorIndex = attributes[texcoordKey];
+
+  if (texcoordAccessorIndex === undefined) {
+    console.warn(
+      `[GltfLoader] Mesh "${meshName}" primitive ${primitiveIndex}: ` +
+      `material ${materialIndex} references a base-color texture using TEXCOORD_${uvSetIndex} ` +
+      `but that attribute is absent – texture will be skipped.`,
+    );
+    return undefined;
+  }
+
+  return texInfo.index;
+}
+
 function normalizeNormalArray(normals: Float32Array): void {
   for (let i = 0; i + 2 < normals.length; i += 3) {
     const x = normals[i];

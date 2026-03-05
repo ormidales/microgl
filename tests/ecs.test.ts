@@ -1026,8 +1026,8 @@ describe('OrbitalCameraSystem', () => {
     const sys = new OrbitalCameraSystem();
     sys.update(em, 0.016);
 
-    // phi must stay within (0, π) and be at least 0.1° away from both poles
-    // (corresponding to the default ±89.9° elevation limit)
+    // phi must stay within (0, π) and be at least (90 - sys.maxElevationDeg)°
+    // away from both poles (0 and π); with the default of 89.9°, this is 0.1°.
     const phiMin = (90 - sys.maxElevationDeg) * (Math.PI / 180);
     expect(cam.phi).toBeGreaterThanOrEqual(phiMin);
     expect(cam.phi).toBeLessThanOrEqual(Math.PI - phiMin);

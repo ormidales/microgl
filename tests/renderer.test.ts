@@ -44,6 +44,31 @@ class MockResizeObserver {
   }
 }
 
+/** Creates a mock MediaQueryList that captures the 'change' listener for manual triggering. */
+function createMockMediaQuery(): {
+  mq: MediaQueryList;
+  triggerChange: () => void;
+  removeEventListenerMock: ReturnType<typeof vi.fn>;
+} {
+  let changeHandler: (() => void) | null = null;
+  const removeEventListenerMock = vi.fn((event: string, handler: () => void) => {
+    if (event === 'change' && changeHandler === handler) changeHandler = null;
+  });
+  const mq = {
+    addEventListener: vi.fn((event: string, handler: () => void) => {
+      if (event === 'change') changeHandler = handler;
+    }),
+    removeEventListener: removeEventListenerMock,
+  } as unknown as MediaQueryList;
+  return {
+    mq,
+    triggerChange: () => {
+      if (changeHandler) changeHandler();
+    },
+    removeEventListenerMock,
+  };
+}
+
 describe('Renderer', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -58,8 +83,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -86,8 +112,9 @@ describe('Renderer', () => {
       antialias: false,
       preserveDrawingBuffer: true,
     };
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -103,8 +130,9 @@ describe('Renderer', () => {
     const gl2 = createMockGL();
     const canvas = new MockCanvas([gl1, gl2]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -123,8 +151,9 @@ describe('Renderer', () => {
     const canvas = new MockCanvas([gl]);
     canvas.clientWidth = 0;
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -138,8 +167,9 @@ describe('Renderer', () => {
     const canvas = new MockCanvas([gl]);
     canvas.clientHeight = 0;
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -152,8 +182,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -172,8 +203,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -197,8 +229,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -212,8 +245,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -231,8 +265,9 @@ describe('Renderer', () => {
     const gl = createMockGL();
     const canvas = new MockCanvas([gl]);
     const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
 
-    vi.stubGlobal('window', { devicePixelRatio: 1 });
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
     vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
     vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
@@ -240,5 +275,109 @@ describe('Renderer', () => {
 
     expect(MockResizeObserver.instances[0].observe).toHaveBeenCalledWith(container);
     expect(MockResizeObserver.instances[0].observe).not.toHaveBeenCalledWith(canvas);
+  });
+
+  it('updates viewport when devicePixelRatio changes to a higher value', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientWidth = 200;
+    canvas.clientHeight = 100;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq, triggerChange } = createMockMediaQuery();
+    const win = { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) };
+
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+
+    // Simulate the window moving to a Retina/4K screen — DPR doubles
+    win.devicePixelRatio = 2;
+    triggerChange();
+
+    expect(canvas.width).toBe(400);
+    expect(canvas.height).toBe(200);
+    expect(gl.viewport).toHaveBeenLastCalledWith(0, 0, 400, 200);
+  });
+
+  it('re-registers the DPR observer after each change to track further DPR transitions', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientWidth = 200;
+    canvas.clientHeight = 100;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    const mqInstances: MediaQueryList[] = [];
+    const triggerFns: Array<() => void> = [];
+    const win = { devicePixelRatio: 1, matchMedia: vi.fn() };
+    win.matchMedia.mockImplementation(() => {
+      const { mq, triggerChange } = createMockMediaQuery();
+      mqInstances.push(mq);
+      triggerFns.push(triggerChange);
+      return mq;
+    });
+
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    new Renderer(container);
+    expect(mqInstances.length).toBe(1);
+
+    // First DPR change: 1 → 2
+    win.devicePixelRatio = 2;
+    triggerFns[0]();
+    expect(canvas.width).toBe(400);
+    expect(canvas.height).toBe(200);
+    expect(mqInstances.length).toBe(2);
+
+    // Second DPR change: 2 → 1
+    win.devicePixelRatio = 1;
+    triggerFns[1]();
+    expect(canvas.width).toBe(200);
+    expect(canvas.height).toBe(100);
+    expect(mqInstances.length).toBe(3);
+  });
+
+  it('removes the DPR media query listener on dispose', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientWidth = 200;
+    canvas.clientHeight = 100;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq, triggerChange, removeEventListenerMock } = createMockMediaQuery();
+    const win = { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) };
+
+    vi.stubGlobal('window', win);
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+    renderer.dispose();
+
+    // The 'change' listener must have been unregistered
+    expect(removeEventListenerMock).toHaveBeenCalledWith('change', expect.any(Function));
+
+    // After dispose, a DPR change must no longer update the viewport
+    const callsBeforeDprChange = (gl.viewport as ReturnType<typeof vi.fn>).mock.calls.length;
+    win.devicePixelRatio = 2;
+    triggerChange();
+    expect(gl.viewport).toHaveBeenCalledTimes(callsBeforeDprChange);
+  });
+
+  it('skips DPR observation when matchMedia is unavailable', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientWidth = 200;
+    canvas.clientHeight = 100;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    vi.stubGlobal('window', { devicePixelRatio: 1 }); // no matchMedia
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    expect(() => new Renderer(container)).not.toThrow();
+    expect(gl.viewport).toHaveBeenCalledWith(0, 0, 200, 100);
   });
 });

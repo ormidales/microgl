@@ -103,3 +103,25 @@ a {
 .demo-performance-panel p {
   margin: 0;
 }
+
+@media (max-width: 767px) {
+  .demo-stage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .demo-canvas-container {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .demo-performance-panel {
+    position: static;
+    border-radius: 0;
+    border-top: 1px solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+    border-right: none;
+    border-bottom: none;
+    border-left: none;
+    pointer-events: none;
+  }
+}

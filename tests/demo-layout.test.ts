@@ -33,4 +33,12 @@ describe('Demo scene layout', () => {
     expect(themeCss).toContain('.demo-canvas-container');
     expect(themeCss).toContain('.demo-performance-panel');
   });
+
+  it('has a responsive media query that docks the performance panel below the canvas on small screens', () => {
+    expect(themeCss).toContain('@media (max-width: 767px)');
+    const mediaBlock = themeCss.slice(themeCss.indexOf('@media (max-width: 767px)'));
+    expect(mediaBlock).toContain('flex-direction: column');
+    expect(mediaBlock).toContain('position: static');
+    expect(mediaBlock).toContain('pointer-events: none');
+  });
 });

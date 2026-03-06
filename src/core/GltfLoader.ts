@@ -336,8 +336,12 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
         : new Float32Array(0);
-      const uvs = prim.attributes['TEXCOORD_0'] !== undefined
-        ? readAccessorFloat(json, buffers, prim.attributes['TEXCOORD_0'])
+      const materialForUvs = prim.material !== undefined ? json.materials?.[prim.material] : undefined;
+      const uvSetIndex = materialForUvs?.pbrMetallicRoughness?.baseColorTexture?.texCoord ?? 0;
+      const uvTexcoordKey = `TEXCOORD_${uvSetIndex}` as GltfPrimitiveAttributeSemantic;
+      const uvAccessorIndex = prim.attributes[uvTexcoordKey];
+      const uvs = uvAccessorIndex !== undefined
+        ? readAccessorFloat(json, buffers, uvAccessorIndex)
         : new Float32Array(0);
       const indices = prim.indices !== undefined
         ? readAccessorIndices(json, buffers, prim.indices)

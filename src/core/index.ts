@@ -16,5 +16,10 @@ export type {
   GltfMesh,
   ParsedMesh,
   GltfLoadResult,
+  GltfMaterial,
+  GltfTexture,
+  GltfImage,
+  GltfTextureInfo,
+  GltfPbrMetallicRoughness,
 } from './GltfTypes';
 export * from './ecs';

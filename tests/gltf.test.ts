@@ -1188,6 +1188,7 @@ describe('loadGltf', () => {
     const result = await loadGltf(glb);
 
     expect(result.meshes[0].baseColorTextureIndex).toBe(0);
+    expect(result.meshes[0].uvs.length).toBe(6);
   });
 
   it('warns and skips baseColorTextureIndex when baseColorTexture.texCoord is 1 but TEXCOORD_1 is absent', async () => {

@@ -15,6 +15,9 @@ export interface GltfAsset {
   scenes?: GltfScene[];
   nodes?: GltfNode[];
   meshes?: GltfMesh[];
+  materials?: GltfMaterial[];
+  textures?: GltfTexture[];
+  images?: GltfImage[];
   accessors?: GltfAccessor[];
   bufferViews?: GltfBufferView[];
   buffers?: GltfBuffer[];
@@ -73,8 +76,54 @@ export interface GltfPrimitive {
 }
 
 // ---------------------------------------------------------------------------
-// Accessors & BufferViews
+// Materials, Textures, Images
 // ---------------------------------------------------------------------------
+
+/** Reference from a material property to a texture + UV set. */
+export interface GltfTextureInfo {
+  /** Index into the `textures` array. */
+  index: number;
+  /** The UV-set index (TEXCOORD_N). Defaults to 0. */
+  texCoord?: number;
+}
+
+/** PBR metallic-roughness material model. */
+export interface GltfPbrMetallicRoughness {
+  /** RGBA base colour factor multiplied with the base-colour texture. */
+  baseColorFactor?: [number, number, number, number];
+  /** Reference to the base-colour texture. */
+  baseColorTexture?: GltfTextureInfo;
+  metallicFactor?: number;
+  roughnessFactor?: number;
+  metallicRoughnessTexture?: GltfTextureInfo;
+}
+
+/** A glTF material. */
+export interface GltfMaterial {
+  name?: string;
+  pbrMetallicRoughness?: GltfPbrMetallicRoughness;
+  doubleSided?: boolean;
+  alphaMode?: string;
+  alphaCutoff?: number;
+}
+
+/** A glTF texture referencing a sampler and an image source. */
+export interface GltfTexture {
+  /** Index into the `samplers` array (not yet used by this loader). */
+  sampler?: number;
+  /** Index into the `images` array. */
+  source?: number;
+}
+
+/** A glTF image source. */
+export interface GltfImage {
+  name?: string;
+  uri?: string;
+  mimeType?: string;
+  /** Index into `bufferViews` for inline image data. */
+  bufferView?: number;
+}
+
 
 export interface GltfAccessor {
   bufferView?: number;
@@ -130,6 +179,13 @@ export interface ParsedMesh {
   min: number[];
   /** Axis-aligned bounds maximum from the POSITION accessor (typically XYZ). */
   max: number[];
+  /**
+   * Index into the glTF `textures` array for the base-colour texture, when the
+   * primitive's material references one **and** the required `TEXCOORD_N` set is present.
+   * `undefined` when there is no material, no base-colour texture, or when the required
+   * `TEXCOORD_N` attribute is absent (in which case a warning is emitted by the loader).
+   */
+  baseColorTextureIndex?: number;
 }
 
 /** A `GltfNode` with a guaranteed `localMatrix` as injected by `loadGltf`. */

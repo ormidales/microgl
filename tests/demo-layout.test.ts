@@ -33,4 +33,26 @@ describe('Demo scene layout', () => {
     expect(themeCss).toContain('.demo-canvas-container');
     expect(themeCss).toContain('.demo-performance-panel');
   });
+
+  it('has a responsive media query that docks the performance panel below the canvas on small screens', () => {
+    const queryStart = themeCss.indexOf('@media (max-width: 767px)');
+    expect(queryStart).toBeGreaterThanOrEqual(0);
+
+    // Extract only the content inside the @media block by balancing braces.
+    let depth = 0;
+    let blockEnd = -1;
+    for (let i = queryStart; i < themeCss.length; i++) {
+      if (themeCss[i] === '{') depth++;
+      else if (themeCss[i] === '}') {
+        depth--;
+        if (depth === 0) { blockEnd = i; break; }
+      }
+    }
+    expect(blockEnd).toBeGreaterThan(queryStart);
+    const mediaBlock = themeCss.slice(queryStart, blockEnd + 1);
+
+    expect(mediaBlock).toContain('flex-direction: column');
+    expect(mediaBlock).toContain('position: static');
+    expect(mediaBlock).toContain('pointer-events: none');
+  });
 });

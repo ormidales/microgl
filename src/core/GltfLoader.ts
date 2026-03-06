@@ -336,20 +336,22 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const normals = prim.attributes['NORMAL'] !== undefined
         ? readAccessorFloat(json, buffers, prim.attributes['NORMAL'])
         : new Float32Array(0);
-      const materialForUvs = prim.material !== undefined ? json.materials?.[prim.material] : undefined;
-      const uvSetIndex = materialForUvs?.pbrMetallicRoughness?.baseColorTexture?.texCoord ?? 0;
-      const uvTexcoordKey = `TEXCOORD_${uvSetIndex}` as GltfPrimitiveAttributeSemantic;
-      const uvAccessorIndex = prim.attributes[uvTexcoordKey];
-      const uvs = uvAccessorIndex !== undefined
-        ? readAccessorFloat(json, buffers, uvAccessorIndex)
-        : new Float32Array(0);
-      const indices = prim.indices !== undefined
-        ? readAccessorIndices(json, buffers, prim.indices)
-        : new Uint16Array(0);
 
       const name = mesh.name
         ? (mesh.primitives.length > 1 ? `${mesh.name}_${pi}` : mesh.name)
         : `mesh_${result.length}`;
+
+      const baseColorInfo = resolveBaseColorInfo(json, prim.material, prim.attributes, name, pi);
+      const uvTexcoordKey = `TEXCOORD_${baseColorInfo?.uvSetIndex ?? 0}` as GltfPrimitiveAttributeSemantic;
+      const uvAccessorIndex = prim.attributes[uvTexcoordKey];
+      const uvs = uvAccessorIndex !== undefined
+        ? readAccessorFloat(json, buffers, uvAccessorIndex)
+        : new Float32Array(0);
+
+      const indices = prim.indices !== undefined
+        ? readAccessorIndices(json, buffers, prim.indices)
+        : new Uint16Array(0);
+
       const positionAccessor = positionAccessorIndex !== undefined
         ? getAccessor(json, positionAccessorIndex)
         : undefined;
@@ -359,7 +361,7 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
       const min = positionAccessor?.min ?? computedBounds?.min ?? [];
       const max = positionAccessor?.max ?? computedBounds?.max ?? [];
 
-      const baseColorTextureIndex = extractBaseColorTextureIndex(json, prim.material, prim.attributes, name, pi);
+      const baseColorTextureIndex = baseColorInfo?.textureIndex;
 
       result.push({ name, positions, normals, uvs, indices, min, max, baseColorTextureIndex });
     }
@@ -370,20 +372,23 @@ function extractMeshes(json: GltfAsset, buffers: ArrayBuffer[]): ParsedMesh[] {
 
 
 /**
- * Resolve the base-color texture index for a primitive's material.
+ * Resolve the base-color texture index and UV set for a primitive's material.
  *
- * Respects `baseColorTexture.texCoord` (glTF default: 0) to select the
- * correct `TEXCOORD_N` UV set.  If the required attribute is absent a warning
- * is emitted and `undefined` is returned so that loading continues without
- * interruption.
+ * Returns `{ textureIndex, uvSetIndex }` when the material references a
+ * base-color texture **and** the required `TEXCOORD_N` attribute is present.
+ * Returns `undefined` when there is no material, no base-colour texture, or
+ * the required attribute is absent (in which case a warning is emitted).
+ *
+ * Keeping both values together ensures the UV set selection in `extractMeshes`
+ * and the `baseColorTextureIndex` assignment share a single source of truth.
  */
-function extractBaseColorTextureIndex(
+function resolveBaseColorInfo(
   json: GltfAsset,
   materialIndex: number | undefined,
   attributes: Partial<Record<GltfPrimitiveAttributeSemantic, number>>,
   meshName: string,
   primitiveIndex: number,
-): number | undefined {
+): { textureIndex: number; uvSetIndex: number } | undefined {
   if (materialIndex === undefined) return undefined;
 
   const material: GltfMaterial | undefined = json.materials?.[materialIndex];
@@ -403,7 +408,7 @@ function extractBaseColorTextureIndex(
     return undefined;
   }
 
-  return texInfo.index;
+  return { textureIndex: texInfo.index, uvSetIndex };
 }
 
 function normalizeNormalArray(normals: Float32Array): void {

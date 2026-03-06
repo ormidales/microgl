@@ -181,9 +181,9 @@ export interface ParsedMesh {
   max: number[];
   /**
    * Index into the glTF `textures` array for the base-colour texture, when the
-   * primitive's material references one **and** `TEXCOORD_0` is present.
-   * `undefined` when there is no material, no base-colour texture, or when
-   * `TEXCOORD_0` is absent (in which case a warning is emitted by the loader).
+   * primitive's material references one **and** the required `TEXCOORD_N` set is present.
+   * `undefined` when there is no material, no base-colour texture, or when the required
+   * `TEXCOORD_N` attribute is absent (in which case a warning is emitted by the loader).
    */
   baseColorTextureIndex?: number;
 }

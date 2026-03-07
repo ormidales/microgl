@@ -9,11 +9,42 @@
     />
     <title>microgl | Gallery</title>
     <link rel="stylesheet" href="/src/styles/theme.css" />
+    <style>
+      body {
+        overflow: auto;
+      }
+
+      .gallery-shell {
+        max-width: 64rem;
+      }
+    </style>
   </head>
   <body>
-    <main class="page-shell">
+    <main class="page-shell gallery-shell">
       <h1>Gallery</h1>
       <p>Explore upcoming scenes and showcases.</p>
+      <section class="gallery-grid" aria-label="Gallery">
+        <article class="gallery-card" id="orbital-camera-control">
+          <h2>Orbital Camera Control</h2>
+          <p>Combines CameraComponent with OrbitalCameraSystem input handling and ECS updates.</p>
+          <span aria-disabled="true">Demo coming soon</span>
+        </article>
+        <article class="gallery-card" id="mesh-render-loop">
+          <h2>Mesh Render Loop</h2>
+          <p>Highlights MeshComponent batching and Material binding through the RenderSystem.</p>
+          <span aria-disabled="true">Demo coming soon</span>
+        </article>
+        <article class="gallery-card" id="ecs-stress-test">
+          <h2>ECS Stress Test</h2>
+          <p>Spawns 10,000 animated triangles and displays a live FPS counter for frame-rate validation.</p>
+          <a href="/demo.html?demo=stress">Open demo</a>
+        </article>
+        <article class="gallery-card" id="gltf-scene-loader">
+          <h2>glTF Scene Loader</h2>
+          <p>Loads and renders a glTF asset with PBR materials through the ECS pipeline.</p>
+          <a href="/demo.html?demo=gltf">Open demo</a>
+        </article>
+      </section>
       <nav aria-label="Main">
         <a href="/index.html">Home</a>
         <a href="/demos.html">Demos</a>

@@ -53,12 +53,16 @@ export function runStressDemo(): void {
   const em = new EntityManager();
   const renderSystem = new RenderSystem(renderer, material);
   const movementSystem = new StressMovementSystem();
+  let renderLoopActive = true;
   renderer.onContextLost(() => {
+    renderLoopActive = false;
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
     material.restore(gl);
     renderSystem.resetGpuResources();
+    renderLoopActive = true;
+    requestAnimationFrame(loop);
   });
 
   const camera = em.createEntity();
@@ -90,7 +94,7 @@ export function runStressDemo(): void {
     renderer.clear(0.05, 0.05, 0.08, 1.0);
     movementSystem.safeUpdate(em, time.deltaTime);
     renderSystem.safeUpdate(em, time.deltaTime);
-    requestAnimationFrame(loop);
+    if (renderLoopActive) requestAnimationFrame(loop);
   }
 
   requestAnimationFrame(loop);

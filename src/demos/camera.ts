@@ -43,12 +43,16 @@ export function runCameraDemo(): void {
   const renderSystem = new RenderSystem(renderer, material);
   const cameraSystem = new OrbitalCameraSystem();
   cameraSystem.attach(renderer.canvas);
+  let renderLoopActive = true;
   renderer.onContextLost(() => {
+    renderLoopActive = false;
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
     material.restore(gl);
     renderSystem.resetGpuResources();
+    renderLoopActive = true;
+    requestAnimationFrame(loop);
   });
 
   const camera = em.createEntity();
@@ -71,7 +75,7 @@ export function runCameraDemo(): void {
     renderer.clear(0.08, 0.08, 0.12, 1.0);
     cameraSystem.update(em, time.deltaTime);
     renderSystem.update(em, time.deltaTime);
-    requestAnimationFrame(loop);
+    if (renderLoopActive) requestAnimationFrame(loop);
   }
 
   requestAnimationFrame(loop);

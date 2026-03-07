@@ -43,15 +43,14 @@ export class EntityManager {
     if (!this.entities.has(id)) return;
 
     // Remove only from stores for component types the entity actually owns.
-    // Call dispose() on each component before evicting it so that large
-    // internal references (e.g. typed-array geometry data) are released
-    // immediately rather than waiting for the next GC cycle.
+    // Dispose each component only when no other entity still references the
+    // same instance (components may be shared across entities).
     const signature = this.signatures.get(id);
     if (signature) {
       for (const componentType of signature) {
         const store = this.stores.get(componentType);
         if (store) {
-          store.get(id)?.dispose?.();
+          this.disposeIfUnshared(store, id);
           store.delete(id);
           if (store.size === 0) {
             this.stores.delete(componentType);
@@ -99,6 +98,7 @@ export class EntityManager {
 
     const store = this.stores.get(componentType);
     if (store) {
+      this.disposeIfUnshared(store, id);
       store.delete(id);
       if (store.size === 0) {
         this.stores.delete(componentType);
@@ -237,5 +237,20 @@ export class EntityManager {
         this.viewKeysByComponentType.delete(componentType);
       }
     }
+  }
+
+  /**
+   * Call `dispose()` on the component owned by `id` in `store` only when no
+   * other entity in the same store still holds a reference to the exact same
+   * component instance.  This prevents silent data corruption when one
+   * component object is intentionally shared across multiple entities.
+   */
+  private disposeIfUnshared(store: Map<EntityId, Component>, id: EntityId): void {
+    const component = store.get(id);
+    if (!component?.dispose) return;
+    for (const [otherId, otherComponent] of store) {
+      if (otherId !== id && otherComponent === component) return;
+    }
+    component.dispose();
   }
 }

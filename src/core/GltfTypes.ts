@@ -128,7 +128,7 @@ export interface GltfImage {
 export interface GltfAccessor {
   bufferView?: number;
   byteOffset?: number;
-  componentType: number;
+  componentType: GltfComponentType;
   count: number;
   type: string;
   sparse?: unknown;
@@ -163,6 +163,15 @@ export const GL_SHORT = 5122;
 export const GL_UNSIGNED_SHORT = 5123;
 export const GL_UNSIGNED_INT = 5125;
 export const GL_FLOAT = 5126;
+
+/** Union of all valid glTF 2.0 accessor component types (§3.6.2.2). */
+export type GltfComponentType =
+  | typeof GL_BYTE
+  | typeof GL_UNSIGNED_BYTE
+  | typeof GL_SHORT
+  | typeof GL_UNSIGNED_SHORT
+  | typeof GL_UNSIGNED_INT
+  | typeof GL_FLOAT;
 
 // ---------------------------------------------------------------------------
 // Parsed geometry result

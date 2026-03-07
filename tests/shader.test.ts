@@ -226,6 +226,60 @@ describe('ShaderCache', () => {
     expect(gl.deleteShader).toHaveBeenCalled();
   });
 
+  it('dispose calls deleteProgram and deleteShader exactly once per cached resource', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    const p1 = cache.getProgram('vert-a', 'frag-a', 'prog-a');
+    const p2 = cache.getProgram('vert-b', 'frag-b', 'prog-b');
+    cache.dispose();
+
+    // Two programs → two deleteProgram calls, each with the correct object
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(2);
+    expect(gl.deleteProgram).toHaveBeenCalledWith(p1);
+    expect(gl.deleteProgram).toHaveBeenCalledWith(p2);
+    // Four distinct shaders → four deleteShader calls
+    expect(gl.deleteShader).toHaveBeenCalledTimes(4);
+  });
+
+  it('dispose clears the internal cache so a subsequent getProgram recompiles', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    const before = cache.getProgram('v', 'f', 'key');
+    cache.dispose();
+
+    // After dispose the cache must be empty; a new program must be compiled.
+    const after = cache.getProgram('v', 'f', 'key');
+    expect(after).not.toBe(before);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+  });
+
+  it('dispose is safe on an empty cache and does not call any delete methods', () => {
+    cache.dispose();
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+    expect(gl.deleteShader).not.toHaveBeenCalled();
+  });
+
+  it('dispose is idempotent: a second call after the cache is already empty is a no-op', () => {
+    cache.getProgram('v', 'f', 'key');
+    cache.dispose();
+
+    // Second dispose on an already-empty cache must not call any delete methods again.
+    cache.dispose();
+    // Still exactly 1 deleteProgram and 2 deleteShader calls from the first dispose.
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+  });
+
   it('removeProgram deletes only the targeted program resources', () => {
     let programId = 0;
     (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(

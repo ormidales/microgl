@@ -339,7 +339,7 @@ describe('readAccessorFloat', () => {
     const json: GltfAsset = {
       asset: { version: '2.0' },
       accessors: [
-        { bufferView: 0, componentType: 9999, count: 1, type: 'VEC3' },
+        { bufferView: 0, componentType: 9999 as any, count: 1, type: 'VEC3' },
       ],
       bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
       buffers: [{ byteLength: 12 }],
@@ -445,7 +445,7 @@ describe('readAccessorIndices', () => {
     const json: GltfAsset = {
       asset: { version: '2.0' },
       accessors: [
-        { bufferView: 0, componentType: 9999, count: 3, type: 'SCALAR' },
+        { bufferView: 0, componentType: 9999 as any, count: 3, type: 'SCALAR' },
       ],
       bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
       buffers: [{ byteLength: 6 }],

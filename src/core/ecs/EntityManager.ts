@@ -42,12 +42,16 @@ export class EntityManager {
   destroyEntity(id: EntityId): void {
     if (!this.entities.has(id)) return;
 
-    // Remove only from stores for component types the entity actually owns
+    // Remove only from stores for component types the entity actually owns.
+    // Call dispose() on each component before evicting it so that large
+    // internal references (e.g. typed-array geometry data) are released
+    // immediately rather than waiting for the next GC cycle.
     const signature = this.signatures.get(id);
     if (signature) {
       for (const componentType of signature) {
         const store = this.stores.get(componentType);
         if (store) {
+          store.get(id)?.dispose?.();
           store.delete(id);
           if (store.size === 0) {
             this.stores.delete(componentType);

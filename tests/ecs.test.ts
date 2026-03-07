@@ -247,6 +247,60 @@ describe('EntityManager', () => {
     expect(em.hasComponent(b, 'Mesh')).toBe(true);
   });
 
+  it('destroyEntity calls dispose() on each removed component', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const mesh = new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]));
+    em.addComponent(id, mesh);
+
+    expect(mesh.vertices.length).toBe(9);
+
+    em.destroyEntity(id);
+
+    // dispose() should have cleared the typed-array references
+    expect(mesh.vertices.length).toBe(0);
+    expect(mesh.indices.length).toBe(0);
+    expect(mesh.normals.length).toBe(0);
+    expect(mesh.uvs.length).toBe(0);
+  });
+
+  it('destroyEntity does not throw when components have no dispose() method', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+
+    // TransformComponent does not implement dispose() – must not throw
+    expect(() => em.destroyEntity(id)).not.toThrow();
+  });
+
+  it('destroys 1000 entities and leaves no stale component data in stores or signatures', () => {
+    const em = new EntityManager();
+    const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+
+    // Register a view before creating entities so view-cleanup is exercised
+    em.getEntitiesWith('Transform', 'Mesh');
+
+    for (let i = 0; i < 1000; i++) {
+      const id = em.createEntity();
+      em.addComponent(id, new TransformComponent(i, 0, 0));
+      em.addComponent(id, new MeshComponent(vertices));
+    }
+
+    expect(em.getEntitiesWith('Transform', 'Mesh')).toHaveLength(1000);
+
+    // Capture IDs before destroying
+    const ids = em.getEntitiesWith('Transform', 'Mesh');
+    for (const id of ids) {
+      em.destroyEntity(id);
+    }
+
+    expect(em.getEntitiesWith('Transform', 'Mesh')).toHaveLength(0);
+    expect((em as any).stores.size).toBe(0);
+    expect((em as any).signatures.size).toBe(0);
+    expect((em as any).entities.size).toBe(0);
+    expect((em as any).freeIds.length).toBe(1000);
+  });
+
   it('supports more than 31 distinct component types', () => {
     const em = new EntityManager();
     const id = em.createEntity();

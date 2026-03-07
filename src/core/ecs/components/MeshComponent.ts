@@ -18,4 +18,18 @@ export class MeshComponent implements Component {
     public min: number[] = [],
     public max: number[] = [],
   ) {}
+
+  /**
+   * Release internal typed-array references so that large geometry buffers
+   * can be collected by the GC as soon as the owning entity is destroyed.
+   * Called automatically by {@link EntityManager.destroyEntity}.
+   */
+  dispose(): void {
+    this.vertices = MeshComponent.EMPTY_FLOAT32;
+    this.indices = MeshComponent.EMPTY_UINT16;
+    this.normals = MeshComponent.EMPTY_FLOAT32;
+    this.uvs = MeshComponent.EMPTY_FLOAT32;
+    this.min = [];
+    this.max = [];
+  }
 }

@@ -7,7 +7,7 @@ import {
   buildNodeLocalMatrix,
 } from '../src/core/GltfLoader';
 import * as GltfLoaderModule from '../src/core/GltfLoader';
-import type { GltfAsset } from '../src/core/GltfTypes';
+import type { GltfAsset, GltfComponentType } from '../src/core/GltfTypes';
 import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 
@@ -339,7 +339,7 @@ describe('readAccessorFloat', () => {
     const json: GltfAsset = {
       asset: { version: '2.0' },
       accessors: [
-        { bufferView: 0, componentType: 9999 as any, count: 1, type: 'VEC3' },
+        { bufferView: 0, componentType: 9999 as unknown as GltfComponentType, count: 1, type: 'VEC3' },
       ],
       bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
       buffers: [{ byteLength: 12 }],
@@ -445,7 +445,7 @@ describe('readAccessorIndices', () => {
     const json: GltfAsset = {
       asset: { version: '2.0' },
       accessors: [
-        { bufferView: 0, componentType: 9999 as any, count: 3, type: 'SCALAR' },
+        { bufferView: 0, componentType: 9999 as unknown as GltfComponentType, count: 3, type: 'SCALAR' },
       ],
       bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
       buffers: [{ byteLength: 6 }],

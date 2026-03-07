@@ -21,5 +21,6 @@ export type {
   GltfImage,
   GltfTextureInfo,
   GltfPbrMetallicRoughness,
+  GltfComponentType,
 } from './GltfTypes';
 export * from './ecs';

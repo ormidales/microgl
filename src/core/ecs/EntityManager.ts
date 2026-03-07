@@ -24,6 +24,8 @@ export class EntityManager {
   private readonly views: Map<string, { componentTypes: string[]; entities: Set<EntityId> }> = new Map();
   /** component-type → query-signatures that include this component */
   private readonly viewKeysByComponentType: Map<string, Set<string>> = new Map();
+  /** component instance → number of entities that currently reference it */
+  private readonly componentRefCounts: WeakMap<Component, number> = new WeakMap();
 
   // ---------------------------------------------------------------------------
   // Entity lifecycle
@@ -42,12 +44,16 @@ export class EntityManager {
   destroyEntity(id: EntityId): void {
     if (!this.entities.has(id)) return;
 
-    // Remove only from stores for component types the entity actually owns
+    // Remove only from stores for component types the entity actually owns.
+    // Decrement each component's reference count and dispose it only when the
+    // count reaches zero (i.e. no other entity holds the same instance).
     const signature = this.signatures.get(id);
     if (signature) {
       for (const componentType of signature) {
         const store = this.stores.get(componentType);
         if (store) {
+          const component = store.get(id);
+          if (component) this.decrementRefCount(component);
           store.delete(id);
           if (store.size === 0) {
             this.stores.delete(componentType);
@@ -80,6 +86,20 @@ export class EntityManager {
       store = new Map();
       this.stores.set(cType, store);
     }
+
+    // If an existing component of the same type is being replaced, decrement
+    // the old instance's reference count (and dispose it when it hits zero).
+    const existing = store.get(id);
+    if (existing !== undefined && existing !== component) {
+      this.decrementRefCount(existing);
+    }
+
+    // Increment the reference count for the incoming component only when the
+    // entity doesn't already hold this exact same instance.
+    if (existing !== component) {
+      this.incrementRefCount(component);
+    }
+
     store.set(id, component);
 
     const signature = this.signatures.get(id);
@@ -95,6 +115,8 @@ export class EntityManager {
 
     const store = this.stores.get(componentType);
     if (store) {
+      const component = store.get(id);
+      if (component) this.decrementRefCount(component);
       store.delete(id);
       if (store.size === 0) {
         this.stores.delete(componentType);
@@ -232,6 +254,27 @@ export class EntityManager {
       if (keys.size === 0) {
         this.viewKeysByComponentType.delete(componentType);
       }
+    }
+  }
+
+  /** Increment the reference count for a disposable component instance. */
+  private incrementRefCount(component: Component): void {
+    if (!component.dispose) return;
+    this.componentRefCounts.set(component, (this.componentRefCounts.get(component) ?? 0) + 1);
+  }
+
+  /**
+   * Decrement the reference count for `component` and call `dispose()` when
+   * the count reaches zero.  O(1) — no store scan required.
+   */
+  private decrementRefCount(component: Component): void {
+    if (!component.dispose) return;
+    const count = this.componentRefCounts.get(component) ?? 0;
+    if (count <= 1) {
+      this.componentRefCounts.delete(component);
+      component.dispose();
+    } else {
+      this.componentRefCounts.set(component, count - 1);
     }
   }
 }

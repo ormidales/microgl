@@ -17,7 +17,15 @@ export type Quaternion = [number, number, number, number];
 /**
  * Base interface for all components.
  * Each component type must declare a unique `type` string.
+ *
+ * Components may optionally implement {@link dispose} to release internal
+ * references (e.g. large typed arrays) when the owning entity is destroyed.
+ * {@link EntityManager.destroyEntity} calls this hook automatically so that
+ * component data is nullified as soon as the entity is gone, rather than
+ * waiting for the next garbage-collection cycle.
  */
 export interface Component {
   readonly type: string;
+  /** Release internal references held by this component. Called by {@link EntityManager.destroyEntity}. */
+  dispose?(): void;
 }

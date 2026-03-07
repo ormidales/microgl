@@ -84,12 +84,16 @@ export function runTransformDemo(): void {
   const cameraSystem = new OrbitalCameraSystem();
   const rotateCubeSystem = new RotateCubeSystem(rotationXValue, rotationYValue);
   cameraSystem.attach(renderer.canvas);
+  let renderLoopActive = true;
   renderer.onContextLost(() => {
+    renderLoopActive = false;
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
     material.restore(gl);
     renderSystem.resetGpuResources();
+    renderLoopActive = true;
+    requestAnimationFrame(loop);
   });
 
   const camera = em.createEntity();
@@ -110,7 +114,7 @@ export function runTransformDemo(): void {
     cameraSystem.update(em, time.deltaTime);
     renderSystem.update(em, time.deltaTime);
 
-    requestAnimationFrame(loop);
+    if (renderLoopActive) requestAnimationFrame(loop);
   }
 
   requestAnimationFrame(loop);

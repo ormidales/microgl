@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Renderer } from '../src/core/Renderer';
 
-function createMockGL(): WebGL2RenderingContext {
+function createMockGL(contextLost = false): WebGL2RenderingContext {
   return {
     COLOR_BUFFER_BIT: 0x4000,
     DEPTH_BUFFER_BIT: 0x0100,
     viewport: vi.fn(),
     clearColor: vi.fn(),
     clear: vi.fn(),
+    isContextLost: vi.fn(() => contextLost),
   } as unknown as WebGL2RenderingContext;
 }
 
@@ -379,5 +380,37 @@ describe('Renderer', () => {
 
     expect(() => new Renderer(container)).not.toThrow();
     expect(gl.viewport).toHaveBeenCalledWith(0, 0, 200, 100);
+  });
+
+  it('isContextLost returns false when context is active', () => {
+    const gl = createMockGL(false);
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
+
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+
+    expect(renderer.isContextLost).toBe(false);
+    expect(gl.isContextLost).toHaveBeenCalled();
+  });
+
+  it('isContextLost returns true when context is lost', () => {
+    const gl = createMockGL(true);
+    const canvas = new MockCanvas([gl]);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
+
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+
+    expect(renderer.isContextLost).toBe(true);
+    expect(gl.isContextLost).toHaveBeenCalled();
   });
 });

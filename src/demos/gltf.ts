@@ -102,12 +102,16 @@ export function runGltfDemo(): void {
   const renderSystem = new RenderSystem(renderer, material);
   const cameraSystem = new OrbitalCameraSystem();
   cameraSystem.attach(renderer.canvas);
+  let renderLoopActive = true;
   renderer.onContextLost(() => {
+    renderLoopActive = false;
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
     material.restore(gl);
     renderSystem.resetGpuResources();
+    renderLoopActive = true;
+    requestAnimationFrame(loop);
   });
 
   const statusLabel = document.createElement('p');
@@ -159,7 +163,7 @@ export function runGltfDemo(): void {
     renderer.clear(0.08, 0.08, 0.12, 1.0);
     cameraSystem.safeUpdate(em, time.deltaTime);
     renderSystem.safeUpdate(em, time.deltaTime);
-    requestAnimationFrame(loop);
+    if (renderLoopActive) requestAnimationFrame(loop);
   }
 
   requestAnimationFrame(loop);

@@ -244,8 +244,14 @@ describe('ShaderCache', () => {
     expect(gl.deleteProgram).toHaveBeenCalledTimes(2);
     expect(gl.deleteProgram).toHaveBeenCalledWith(p1);
     expect(gl.deleteProgram).toHaveBeenCalledWith(p2);
-    // Four distinct shaders → four deleteShader calls
-    expect(gl.deleteShader).toHaveBeenCalledTimes(4);
+    // Four distinct shaders → four deleteShader calls, each with the correct object
+    const createdShaders = (gl.createShader as ReturnType<typeof vi.fn>).mock.results.map(
+      (result) => result.value as WebGLShader,
+    );
+    expect(gl.deleteShader).toHaveBeenCalledTimes(createdShaders.length);
+    for (const shader of createdShaders) {
+      expect(gl.deleteShader).toHaveBeenCalledWith(shader);
+    }
   });
 
   it('dispose clears the internal cache so a subsequent getProgram recompiles', () => {
@@ -270,14 +276,32 @@ describe('ShaderCache', () => {
   });
 
   it('dispose is idempotent: a second call after the cache is already empty is a no-op', () => {
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
     cache.getProgram('v', 'f', 'key');
     cache.dispose();
 
+    // Capture what was deleted in the first dispose.
+    const createdShaders = (gl.createShader as ReturnType<typeof vi.fn>).mock.results.map(
+      (result) => result.value as WebGLShader,
+    );
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(createdShaders.length);
+    for (const shader of createdShaders) {
+      expect(gl.deleteShader).toHaveBeenCalledWith(shader);
+    }
+
     // Second dispose on an already-empty cache must not call any delete methods again.
     cache.dispose();
-    // Still exactly 1 deleteProgram and 2 deleteShader calls from the first dispose.
     expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
-    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+    expect(gl.deleteShader).toHaveBeenCalledTimes(createdShaders.length);
   });
 
   it('removeProgram deletes only the targeted program resources', () => {

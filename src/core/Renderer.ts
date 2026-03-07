@@ -61,7 +61,7 @@ export class Renderer {
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
   }
 
-  /** Returns `true` while the WebGL context is lost and rendering is suspended. */
+  /** Returns `true` if the WebGL context is currently lost. */
   get isContextLost(): boolean {
     return this.gl.isContextLost();
   }

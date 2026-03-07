@@ -247,6 +247,112 @@ describe('EntityManager', () => {
     expect(em.hasComponent(b, 'Mesh')).toBe(true);
   });
 
+  it('destroyEntity calls dispose() on each removed component', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const mesh = new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]));
+    em.addComponent(id, mesh);
+
+    expect(mesh.vertices.length).toBe(9);
+
+    em.destroyEntity(id);
+
+    // dispose() should have cleared the typed-array references
+    expect(mesh.vertices.length).toBe(0);
+    expect(mesh.indices.length).toBe(0);
+    expect(mesh.normals.length).toBe(0);
+    expect(mesh.uvs.length).toBe(0);
+  });
+
+  it('destroyEntity does not throw when components have no dispose() method', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+
+    // TransformComponent does not implement dispose() – must not throw
+    expect(() => em.destroyEntity(id)).not.toThrow();
+  });
+
+  it('destroyEntity does not dispose a shared MeshComponent while another entity still holds it', () => {
+    const em = new EntityManager();
+    const sharedVertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const mesh = new MeshComponent(sharedVertices);
+
+    const a = em.createEntity();
+    const b = em.createEntity();
+    em.addComponent(a, mesh);
+    em.addComponent(b, mesh);
+
+    // Destroy only entity A – entity B still owns the same instance
+    em.destroyEntity(a);
+
+    expect(em.hasEntity(b)).toBe(true);
+    expect(em.hasComponent(b, 'Mesh')).toBe(true);
+    // The shared instance must NOT have been disposed
+    expect(mesh.vertices.length).toBe(sharedVertices.length);
+
+    // Destroying the last entity that holds the instance must dispose it
+    em.destroyEntity(b);
+    expect(mesh.vertices.length).toBe(0);
+  });
+
+  it('removeComponent calls dispose() when the component is no longer shared', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    const mesh = new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]));
+    em.addComponent(id, mesh);
+
+    em.removeComponent(id, 'Mesh');
+
+    expect(mesh.vertices.length).toBe(0);
+  });
+
+  it('removeComponent does not dispose a shared MeshComponent while another entity still holds it', () => {
+    const em = new EntityManager();
+    const sharedVertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const mesh = new MeshComponent(sharedVertices);
+
+    const a = em.createEntity();
+    const b = em.createEntity();
+    em.addComponent(a, mesh);
+    em.addComponent(b, mesh);
+
+    // Remove the Mesh from entity A only
+    em.removeComponent(a, 'Mesh');
+
+    // Entity B still holds the instance – must not have been disposed
+    expect(em.hasComponent(b, 'Mesh')).toBe(true);
+    expect(mesh.vertices.length).toBe(sharedVertices.length);
+  });
+
+  it('destroys 1000 entities and leaves no stale component data in stores or signatures', () => {
+    const em = new EntityManager();
+    const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+
+    // Register a view before creating entities so view-cleanup is exercised
+    em.getEntitiesWith('Transform', 'Mesh');
+
+    for (let i = 0; i < 1000; i++) {
+      const id = em.createEntity();
+      em.addComponent(id, new TransformComponent(i, 0, 0));
+      em.addComponent(id, new MeshComponent(vertices));
+    }
+
+    expect(em.getEntitiesWith('Transform', 'Mesh')).toHaveLength(1000);
+
+    // Capture IDs before destroying
+    const ids = em.getEntitiesWith('Transform', 'Mesh');
+    for (const id of ids) {
+      em.destroyEntity(id);
+    }
+
+    expect(em.getEntitiesWith('Transform', 'Mesh')).toHaveLength(0);
+    expect((em as any).stores.size).toBe(0);
+    expect((em as any).signatures.size).toBe(0);
+    expect((em as any).entities.size).toBe(0);
+    expect((em as any).freeIds.length).toBe(1000);
+  });
+
   it('supports more than 31 distinct component types', () => {
     const em = new EntityManager();
     const id = em.createEntity();

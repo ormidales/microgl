@@ -1318,13 +1318,52 @@ describe('loadGltf', () => {
     });
   });
 
-  it('still rejects with original cause chain for resolveUri / buffer errors', async () => {
-    // External URI without a resolver – error comes from resolveBuffers, not wrapped.
+  it('rejects with unwrapped error when resolveUri callback is absent', async () => {
+    // Error comes from resolveBuffers, not from parseContainer or extractMeshes,
+    // so it must NOT carry the "Failed to parse …" / "Failed to extract …" prefixes.
     const { json } = triangleAsset();
     json.buffers = [{ uri: 'external.bin', byteLength: 42 }];
 
     const buffer = jsonToBuffer(json);
-    await expect(loadGltf(buffer)).rejects.toThrow(/no resolveUri callback/);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    const message = (err as Error).message;
+    expect(message).toMatch(/no resolveUri callback/);
+    expect(message).not.toMatch(/Failed to parse glTF container/);
+    expect(message).not.toMatch(/Failed to extract glTF meshes/);
+    // resolveBuffers errors are not wrapped, so there is no added cause layer.
+    expect((err as Error & { cause?: unknown }).cause).toBeUndefined();
+  });
+
+  it('preserves fetch error cause chain from resolveBuffers without re-wrapping', async () => {
+    // Use invalid base64 so decodeDataUri's atob fallback also fails, forcing the
+    // error path that attaches the original fetch failure as `cause`. The fetch is
+    // mocked to return a non-OK 403 response, which is what decodeDataUri stores.
+    const { json, bin } = triangleAsset();
+    const uri = `data:application/octet-stream;base64,@@@invalid`; // invalid base64 → atob fallback throws
+    json.buffers = [{ uri, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 403,
+    } as Response);
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      const message = (err as Error).message;
+      // The error originates in decodeDataUri / resolveBuffers – not re-wrapped.
+      expect(message).not.toMatch(/Failed to parse glTF container/);
+      expect(message).not.toMatch(/Failed to extract glTF meshes/);
+      // The original fetch failure must be attached as cause.
+      expect((err as Error & { cause?: unknown }).cause).toBeInstanceOf(Error);
+      expect(((err as Error & { cause?: Error }).cause)!.message).toMatch(/status 403/);
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 

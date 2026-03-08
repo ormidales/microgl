@@ -74,6 +74,15 @@ export class ShaderCache {
         : undefined;
     let cacheKey = key ?? ShaderCache.fnv1a(combinedSource!);
 
+    // For auto-keyed programs: if a collision-resolved entry (stored under
+    // combinedSource) already exists, return it directly.  This handles the
+    // case where the original hash-keyed program was later removed/released
+    // but the collision-resolved program under combinedSource remains cached.
+    if (combinedSource !== undefined) {
+      const collisionEntry = this.programs.get(combinedSource);
+      if (collisionEntry !== undefined) return collisionEntry;
+    }
+
     const existing = this.programs.get(cacheKey);
     if (existing !== undefined) {
       // Guard against FNV-1a hash collisions: verify sources match before returning cache hit.
@@ -149,6 +158,12 @@ export class ShaderCache {
     if (key !== undefined) return key;
     const combinedSource = `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`;
     const hashKey = ShaderCache.fnv1a(combinedSource);
+    // If a collision-resolved entry already exists under the full combined
+    // source key, return that key — even if the original hash slot is now
+    // vacant (e.g. the hash-keyed program was removed/released).
+    if (this.programs.has(combinedSource)) {
+      return combinedSource;
+    }
     // Mirror the collision-resolution logic from getProgram: if the hash slot
     // is already occupied by a *different* source pair, the actual key used is
     // the full combined source string.

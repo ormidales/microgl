@@ -387,9 +387,43 @@ describe('ShaderCache', () => {
     vi.restoreAllMocks();
   });
 
-  // -------------------------------------------------------------------------
-  // retainProgram / releaseProgram
-  // -------------------------------------------------------------------------
+  it('collision-resolved entry survives after the hash-keyed program is removed', () => {
+    // Regression test: removing the original hash-keyed program must not orphan
+    // the collision-resolved program (stored under combinedSource).  Both
+    // getProgramKey and getProgram must continue to point at the surviving entry.
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+      'collision-key',
+    );
+
+    cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
+    const p2 = cache.getProgram('vert-b', 'frag-b'); // collision → stored under combinedSource
+
+    // Remove the hash-keyed program so the hash slot is now vacant.
+    cache.removeProgram('collision-key');
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+
+    // getProgramKey must still return the combinedSource key for the second pair.
+    const keyB = cache.getProgramKey('vert-b', 'frag-b');
+    expect(typeof keyB).toBe('string');
+    // The key must reference the surviving entry — getProgram must not recompile.
+    const retrieved = cache.getProgram('vert-b', 'frag-b');
+    expect(retrieved).toBe(p2);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2); // no extra compilation
+
+    // retain / release must still work correctly via the surviving key.
+    cache.retainProgram(keyB);
+    cache.releaseProgram(keyB);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(2); // now also p2 is deleted
+
+    vi.restoreAllMocks();
+  });
+
+
 
   it('retainProgram is a no-op for an unknown key', () => {
     cache.retainProgram('does-not-exist');

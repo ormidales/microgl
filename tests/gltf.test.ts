@@ -1242,6 +1242,90 @@ describe('loadGltf', () => {
       warnSpy.mockRestore();
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Error-handling: try/catch wrapping
+  // -------------------------------------------------------------------------
+
+  it('wraps a corrupt GLB container error with "Failed to parse glTF container" prefix', async () => {
+    // A GLB whose version field is 1 (unsupported) triggers parseContainer to throw.
+    const glb = new ArrayBuffer(12);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true); // magic
+    view.setUint32(4, 1, true);          // unsupported version
+    view.setUint32(8, 12, true);
+
+    await expect(loadGltf(glb)).rejects.toMatchObject({
+      message: expect.stringContaining('Failed to parse glTF container'),
+      cause: expect.objectContaining({ message: expect.stringContaining('Unsupported GLB version') }),
+    });
+  });
+
+  it('wraps a corrupt GLB container error (no JSON chunk) with "Failed to parse glTF container" prefix', async () => {
+    // A valid GLB header but with no chunks following.
+    const glb = new ArrayBuffer(12);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true);
+    view.setUint32(4, 2, true);
+    view.setUint32(8, 12, true);
+
+    await expect(loadGltf(glb)).rejects.toMatchObject({
+      message: expect.stringContaining('Failed to parse glTF container'),
+      cause: expect.objectContaining({ message: expect.stringContaining('JSON chunk') }),
+    });
+  });
+
+  it('wraps a mesh extraction error (accessor pointing to missing bufferView) with "Failed to extract glTF meshes" prefix', async () => {
+    // Accessor 0 references bufferView 99, which does not exist.
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const bin = positions.buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'BadMesh', primitives: [{ attributes: { POSITION: 0 } }] }],
+      accessors: [
+        { bufferView: 99, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
+      buffers: [{ byteLength: 36 }],
+    };
+
+    const glb = buildGlb(json, bin);
+    await expect(loadGltf(glb)).rejects.toMatchObject({
+      message: expect.stringContaining('Failed to extract glTF meshes'),
+      cause: expect.objectContaining({ message: expect.stringContaining('BufferView 99') }),
+    });
+  });
+
+  it('wraps a mesh extraction error (accessor index out of range) with "Failed to extract glTF meshes" prefix', async () => {
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+    const bin = positions.buffer as ArrayBuffer;
+
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      meshes: [{ name: 'BadMesh', primitives: [{ attributes: { POSITION: 0 }, indices: 99 }] }],
+      accessors: [
+        { bufferView: 0, componentType: GL_FLOAT, count: 3, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36 }],
+      buffers: [{ byteLength: 36 }],
+    };
+
+    const glb = buildGlb(json, bin);
+    await expect(loadGltf(glb)).rejects.toMatchObject({
+      message: expect.stringContaining('Failed to extract glTF meshes'),
+      cause: expect.objectContaining({ message: expect.stringContaining('Accessor 99') }),
+    });
+  });
+
+  it('still rejects with original cause chain for resolveUri / buffer errors', async () => {
+    // External URI without a resolver – error comes from resolveBuffers, not wrapped.
+    const { json } = triangleAsset();
+    json.buffers = [{ uri: 'external.bin', byteLength: 42 }];
+
+    const buffer = jsonToBuffer(json);
+    await expect(loadGltf(buffer)).rejects.toThrow(/no resolveUri callback/);
+  });
 });
 
 // ---------------------------------------------------------------------------

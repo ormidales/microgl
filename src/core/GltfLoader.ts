@@ -63,11 +63,22 @@ export async function loadGltf(
   buffer: ArrayBuffer,
   options: GltfLoaderOptions = {},
 ): Promise<GltfLoadResult> {
-  const { json, binChunk } = parseContainer(buffer, options);
+  let json: GltfAsset;
+  let binChunk: ArrayBuffer | undefined;
+  try {
+    ({ json, binChunk } = parseContainer(buffer, options));
+  } catch (e) {
+    throw wrapGltfError('Failed to parse glTF container', e);
+  }
 
   const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
 
-  const meshes = extractMeshes(json, buffers);
+  let meshes: ParsedMesh[];
+  try {
+    meshes = extractMeshes(json, buffers);
+  } catch (e) {
+    throw wrapGltfError('Failed to extract glTF meshes', e);
+  }
 
   if (options.normalizeNormals) {
     for (const mesh of meshes) {
@@ -76,6 +87,17 @@ export async function loadGltf(
   }
 
   return { meshes, nodes: (json.nodes ?? []).map(attachLocalMatrix) };
+}
+
+/**
+ * Wrap an unknown caught value in a new Error with a descriptive prefix,
+ * attaching the original as `cause` when it is an Error instance.
+ */
+function wrapGltfError(prefix: string, cause: unknown): Error {
+  const msg = cause instanceof Error ? cause.message : String(cause);
+  const wrapped = new Error(`${prefix}: ${msg}`);
+  if (cause instanceof Error) (wrapped as Error & { cause?: Error }).cause = cause;
+  return wrapped;
 }
 
 // ---------------------------------------------------------------------------

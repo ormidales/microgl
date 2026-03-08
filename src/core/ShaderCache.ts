@@ -29,6 +29,8 @@ export class ShaderCache {
   private readonly shaderRefCounts: Map<string, number> = new Map();
   /** program key → combined source string (only for auto-keyed entries, used to detect hash collisions) */
   private readonly programSources: Map<string, string> = new Map();
+  /** program key → number of consumers currently retaining this program */
+  private readonly programRefCounts: Map<string, number> = new Map();
 
   private readonly gl: WebGL2RenderingContext;
 
@@ -71,6 +73,15 @@ export class ShaderCache {
         ? `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`
         : undefined;
     let cacheKey = key ?? ShaderCache.fnv1a(combinedSource!);
+
+    // For auto-keyed programs: if a collision-resolved entry (stored under
+    // combinedSource) already exists, return it directly.  This handles the
+    // case where the original hash-keyed program was later removed/released
+    // but the collision-resolved program under combinedSource remains cached.
+    if (combinedSource !== undefined) {
+      const collisionEntry = this.programs.get(combinedSource);
+      if (collisionEntry !== undefined) return collisionEntry;
+    }
 
     const existing = this.programs.get(cacheKey);
     if (existing !== undefined) {
@@ -126,6 +137,84 @@ export class ShaderCache {
   }
 
   /**
+   * Return the cache key that `getProgram` uses (or would use) for the given
+   * source pair. Use this to obtain the key for auto-keyed programs (i.e.
+   * those where `key` was omitted in the `getProgram` call) before calling
+   * `retainProgram` or `releaseProgram`.
+   *
+   * ```ts
+   * const key = cache.getProgramKey(vertSrc, fragSrc);
+   * const program = cache.getProgram(vertSrc, fragSrc);
+   * cache.retainProgram(key);
+   * // … later …
+   * cache.releaseProgram(key);
+   * ```
+   *
+   * @param vertexSource GLSL vertex shader source
+   * @param fragmentSource GLSL fragment shader source
+   * @param key Explicit cache key, if one was supplied to `getProgram`.
+   */
+  getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
+    if (key !== undefined) return key;
+    const combinedSource = `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`;
+    const hashKey = ShaderCache.fnv1a(combinedSource);
+    // If a collision-resolved entry already exists under the full combined
+    // source key, return that key — even if the original hash slot is now
+    // vacant (e.g. the hash-keyed program was removed/released).
+    if (this.programs.has(combinedSource)) {
+      return combinedSource;
+    }
+    // Mirror the collision-resolution logic from getProgram: if the hash slot
+    // is already occupied by a *different* source pair, the actual key used is
+    // the full combined source string.
+    if (this.programs.has(hashKey) && this.programSources.get(hashKey) !== combinedSource) {
+      return combinedSource;
+    }
+    return hashKey;
+  }
+
+  /**
+   * Increment the consumer reference count for a cached program.
+   *
+   * Call this once per consumer (e.g. a Material) that takes ownership of the
+   * program returned by `getProgram`. Each `retainProgram` call must be
+   * balanced by exactly one `releaseProgram` call when the consumer is
+   * disposed.
+   *
+   * Use `getProgramKey` to obtain the cache key when no explicit key was
+   * supplied to `getProgram`.
+   *
+   * @param key Program cache key — use `getProgramKey(vert, frag)` when the
+   *   program was cached with an auto-generated key.
+   */
+  retainProgram(key: string): void {
+    if (!this.programs.has(key)) return;
+    this.programRefCounts.set(key, (this.programRefCounts.get(key) ?? 0) + 1);
+  }
+
+  /**
+   * Decrement the consumer reference count for a cached program.
+   *
+   * When the count drops to zero the program (and any shaders that are no
+   * longer referenced by any other program) are deleted from the GPU and
+   * removed from the cache automatically.
+   *
+   * @param key Program cache key — use `getProgramKey(vert, frag)` when the
+   *   program was cached with an auto-generated key.
+   */
+  releaseProgram(key: string): void {
+    const current = this.programRefCounts.get(key);
+    if (current === undefined) return;
+    const next = current - 1;
+    if (next > 0) {
+      this.programRefCounts.set(key, next);
+      return;
+    }
+    this.programRefCounts.delete(key);
+    this.removeProgram(key);
+  }
+
+  /**
    * Delete one cached program and any orphaned shaders that were only used by it.
    *
    * @param key Program cache key
@@ -137,6 +226,7 @@ export class ShaderCache {
     this.gl.deleteProgram(program);
     this.programs.delete(key);
     this.programSources.delete(key);
+    this.programRefCounts.delete(key);
 
     const shaderKeys = this.programShaders.get(key);
     if (!shaderKeys) return;
@@ -171,6 +261,7 @@ export class ShaderCache {
     this.programs.clear();
     this.programShaders.clear();
     this.programSources.clear();
+    this.programRefCounts.clear();
     this.shaderRefCounts.clear();
     this.shaders.clear();
   }

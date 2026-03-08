@@ -29,6 +29,8 @@ export class ShaderCache {
   private readonly shaderRefCounts: Map<string, number> = new Map();
   /** program key → combined source string (only for auto-keyed entries, used to detect hash collisions) */
   private readonly programSources: Map<string, string> = new Map();
+  /** program key → number of consumers currently retaining this program */
+  private readonly programRefCounts: Map<string, number> = new Map();
 
   private readonly gl: WebGL2RenderingContext;
 
@@ -126,6 +128,42 @@ export class ShaderCache {
   }
 
   /**
+   * Increment the consumer reference count for a cached program.
+   *
+   * Call this once per consumer (e.g. a Material) that takes ownership of the
+   * program returned by `getProgram`. Each `retainProgram` call must be
+   * balanced by exactly one `releaseProgram` call when the consumer is
+   * disposed.
+   *
+   * @param key Program cache key (the same key passed to `getProgram`)
+   */
+  retainProgram(key: string): void {
+    if (!this.programs.has(key)) return;
+    this.programRefCounts.set(key, (this.programRefCounts.get(key) ?? 0) + 1);
+  }
+
+  /**
+   * Decrement the consumer reference count for a cached program.
+   *
+   * When the count drops to zero the program (and any shaders that are no
+   * longer referenced by any other program) are deleted from the GPU and
+   * removed from the cache automatically.
+   *
+   * @param key Program cache key
+   */
+  releaseProgram(key: string): void {
+    const current = this.programRefCounts.get(key);
+    if (current === undefined) return;
+    const next = current - 1;
+    if (next > 0) {
+      this.programRefCounts.set(key, next);
+      return;
+    }
+    this.programRefCounts.delete(key);
+    this.removeProgram(key);
+  }
+
+  /**
    * Delete one cached program and any orphaned shaders that were only used by it.
    *
    * @param key Program cache key
@@ -137,6 +175,7 @@ export class ShaderCache {
     this.gl.deleteProgram(program);
     this.programs.delete(key);
     this.programSources.delete(key);
+    this.programRefCounts.delete(key);
 
     const shaderKeys = this.programShaders.get(key);
     if (!shaderKeys) return;
@@ -171,6 +210,7 @@ export class ShaderCache {
     this.programs.clear();
     this.programShaders.clear();
     this.programSources.clear();
+    this.programRefCounts.clear();
     this.shaderRefCounts.clear();
     this.shaders.clear();
   }

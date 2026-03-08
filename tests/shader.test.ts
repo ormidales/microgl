@@ -335,6 +335,106 @@ describe('ShaderCache', () => {
     expect(gl.deleteShader).not.toHaveBeenCalled();
   });
 
+  // -------------------------------------------------------------------------
+  // retainProgram / releaseProgram
+  // -------------------------------------------------------------------------
+
+  it('retainProgram is a no-op for an unknown key', () => {
+    cache.retainProgram('does-not-exist');
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+  });
+
+  it('releaseProgram is a no-op for an unretained key', () => {
+    cache.getProgram('v', 'f', 'prog');
+    cache.releaseProgram('prog');
+    // No retain was called, so nothing should be deleted.
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+  });
+
+  it('releaseProgram is a no-op after removeProgram has already cleared the entry', () => {
+    cache.getProgram('v', 'f', 'prog');
+    cache.retainProgram('prog');
+    cache.removeProgram('prog'); // explicit removal clears ref count too
+    cache.releaseProgram('prog'); // must be a no-op; program already gone
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1); // only from removeProgram
+  });
+
+  it('releaseProgram deletes the program when the last retain is released', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    const program = cache.getProgram('v', 'f', 'prog');
+    cache.retainProgram('prog');
+    cache.releaseProgram('prog');
+
+    expect(gl.deleteProgram).toHaveBeenCalledWith(program);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    // Shaders used only by this program must be freed too.
+    expect(gl.deleteShader).toHaveBeenCalledTimes(2);
+    // Program is gone from the cache; next getProgram must recompile.
+    const recompiled = cache.getProgram('v', 'f', 'prog');
+    expect(recompiled).not.toBe(program);
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+  });
+
+  it('releaseProgram keeps the program alive while additional retains are held', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    const program = cache.getProgram('v', 'f', 'prog');
+    cache.retainProgram('prog');
+    cache.retainProgram('prog');
+
+    cache.releaseProgram('prog'); // count goes from 2 → 1; program stays alive
+    expect(gl.deleteProgram).not.toHaveBeenCalled();
+    expect(cache.getProgram('v', 'f', 'prog')).toBe(program);
+
+    cache.releaseProgram('prog'); // count goes from 1 → 0; program deleted
+    expect(gl.deleteProgram).toHaveBeenCalledWith(program);
+  });
+
+  it('two programs sharing a shader: releaseProgram does not delete shared shader', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    // prog-a and prog-b share the same vertex shader source.
+    const programA = cache.getProgram('shared-vert', 'frag-a', 'prog-a');
+    const programB = cache.getProgram('shared-vert', 'frag-b', 'prog-b');
+    cache.retainProgram('prog-a');
+    cache.retainProgram('prog-b');
+
+    cache.releaseProgram('prog-a');
+    expect(gl.deleteProgram).toHaveBeenCalledWith(programA);
+    // The shared vertex shader is still referenced by prog-b; must NOT be deleted.
+    const allDeleteShaderArgs = (gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c: unknown[]) => c[0],
+    );
+    const shaders = (gl.createShader as ReturnType<typeof vi.fn>).mock.results.map(
+      (r) => r.value as WebGLShader,
+    );
+    // shaders[0] = shared-vert, shaders[1] = frag-a, shaders[2] = frag-b
+    expect(allDeleteShaderArgs).toContain(shaders[1]); // frag-a deleted
+    expect(allDeleteShaderArgs).not.toContain(shaders[0]); // shared-vert still alive
+
+    cache.releaseProgram('prog-b');
+    expect(gl.deleteProgram).toHaveBeenCalledWith(programB);
+    const allDeleteShaderArgs2 = (gl.deleteShader as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c: unknown[]) => c[0],
+    );
+    expect(allDeleteShaderArgs2).toContain(shaders[0]); // shared-vert now freed
+    expect(allDeleteShaderArgs2).toContain(shaders[2]); // frag-b freed
+  });
+
   it('does not cache vertex or fragment shader when vertex compilation fails', () => {
     // Vertex shader compilation always fails; fragment never reached.
     gl = createMockGL({

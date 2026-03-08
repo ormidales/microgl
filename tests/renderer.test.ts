@@ -32,7 +32,10 @@ class MockResizeObserver {
   public static instances: MockResizeObserver[] = [];
   public readonly observe = vi.fn();
   public readonly unobserve = vi.fn();
-  public readonly disconnect = vi.fn();
+  private _disconnected = false;
+  public readonly disconnect = vi.fn(() => {
+    this._disconnected = true;
+  });
   private readonly callback: ResizeObserverCallback;
 
   constructor(callback: ResizeObserverCallback) {
@@ -41,7 +44,9 @@ class MockResizeObserver {
   }
 
   public trigger(entries: ResizeObserverEntry[]): void {
-    this.callback(entries, this as unknown as ResizeObserver);
+    if (!this._disconnected) {
+      this.callback(entries, this as unknown as ResizeObserver);
+    }
   }
 }
 
@@ -365,6 +370,31 @@ describe('Renderer', () => {
     win.devicePixelRatio = 2;
     triggerChange();
     expect(gl.viewport).toHaveBeenCalledTimes(callsBeforeDprChange);
+  });
+
+  it('does not update viewport after dispose when resize observer is triggered', () => {
+    const gl = createMockGL();
+    const canvas = new MockCanvas([gl]);
+    canvas.clientWidth = 200;
+    canvas.clientHeight = 100;
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+    const { mq } = createMockMediaQuery();
+
+    vi.stubGlobal('window', { devicePixelRatio: 1, matchMedia: vi.fn(() => mq) });
+    vi.stubGlobal('document', { createElement: vi.fn(() => canvas), body: container });
+    vi.stubGlobal('ResizeObserver', MockResizeObserver);
+
+    const renderer = new Renderer(container);
+    renderer.dispose();
+
+    const callsBeforeResize = (gl.viewport as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    // Simulate a resize event after disposal — must not update the viewport
+    MockResizeObserver.instances[0].trigger([
+      { devicePixelContentBoxSize: [{ inlineSize: 999, blockSize: 888 }] } as unknown as ResizeObserverEntry,
+    ]);
+
+    expect(gl.viewport).toHaveBeenCalledTimes(callsBeforeResize);
   });
 
   it('skips DPR observation when matchMedia is unavailable', () => {

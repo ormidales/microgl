@@ -128,6 +128,37 @@ export class ShaderCache {
   }
 
   /**
+   * Return the cache key that `getProgram` uses (or would use) for the given
+   * source pair. Use this to obtain the key for auto-keyed programs (i.e.
+   * those where `key` was omitted in the `getProgram` call) before calling
+   * `retainProgram` or `releaseProgram`.
+   *
+   * ```ts
+   * const key = cache.getProgramKey(vertSrc, fragSrc);
+   * const program = cache.getProgram(vertSrc, fragSrc);
+   * cache.retainProgram(key);
+   * // … later …
+   * cache.releaseProgram(key);
+   * ```
+   *
+   * @param vertexSource GLSL vertex shader source
+   * @param fragmentSource GLSL fragment shader source
+   * @param key Explicit cache key, if one was supplied to `getProgram`.
+   */
+  getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
+    if (key !== undefined) return key;
+    const combinedSource = `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`;
+    const hashKey = ShaderCache.fnv1a(combinedSource);
+    // Mirror the collision-resolution logic from getProgram: if the hash slot
+    // is already occupied by a *different* source pair, the actual key used is
+    // the full combined source string.
+    if (this.programs.has(hashKey) && this.programSources.get(hashKey) !== combinedSource) {
+      return combinedSource;
+    }
+    return hashKey;
+  }
+
+  /**
    * Increment the consumer reference count for a cached program.
    *
    * Call this once per consumer (e.g. a Material) that takes ownership of the
@@ -135,7 +166,11 @@ export class ShaderCache {
    * balanced by exactly one `releaseProgram` call when the consumer is
    * disposed.
    *
-   * @param key Program cache key (the same key passed to `getProgram`)
+   * Use `getProgramKey` to obtain the cache key when no explicit key was
+   * supplied to `getProgram`.
+   *
+   * @param key Program cache key — use `getProgramKey(vert, frag)` when the
+   *   program was cached with an auto-generated key.
    */
   retainProgram(key: string): void {
     if (!this.programs.has(key)) return;
@@ -149,7 +184,8 @@ export class ShaderCache {
    * longer referenced by any other program) are deleted from the GPU and
    * removed from the cache automatically.
    *
-   * @param key Program cache key
+   * @param key Program cache key — use `getProgramKey(vert, frag)` when the
+   *   program was cached with an auto-generated key.
    */
   releaseProgram(key: string): void {
     const current = this.programRefCounts.get(key);

@@ -336,6 +336,58 @@ describe('ShaderCache', () => {
   });
 
   // -------------------------------------------------------------------------
+  // getProgramKey
+  // -------------------------------------------------------------------------
+
+  it('getProgramKey returns the explicit key unchanged', () => {
+    cache.getProgram('v', 'f', 'my-key');
+    expect(cache.getProgramKey('v', 'f', 'my-key')).toBe('my-key');
+  });
+
+  it('getProgramKey returns the same hash key used by getProgram for auto-keyed programs', () => {
+    cache.getProgram('vert', 'frag');
+    const key = cache.getProgramKey('vert', 'frag');
+    // The key must be stable and point to the already-cached program.
+    cache.retainProgram(key);
+    cache.releaseProgram(key);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+  });
+
+  it('getProgramKey works before getProgram is called (consistent key)', () => {
+    const keyBefore = cache.getProgramKey('vert', 'frag');
+    cache.getProgram('vert', 'frag');
+    const keyAfter = cache.getProgramKey('vert', 'frag');
+    expect(keyBefore).toBe(keyAfter);
+  });
+
+  it('getProgramKey returns the collision-free key after a hash collision', () => {
+    let programId = 0;
+    (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __programId: programId++ }) as unknown as WebGLProgram,
+    );
+
+    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+      'collision-key',
+    );
+
+    cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
+    // Second pair collides; must be stored under its combinedSource string.
+    cache.getProgram('vert-b', 'frag-b');
+
+    // getProgramKey must return the collision-free key for the second pair.
+    const keyB = cache.getProgramKey('vert-b', 'frag-b');
+    cache.retainProgram(keyB);
+    cache.releaseProgram(keyB);
+    expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
+    // The first program must still be alive.
+    expect(gl.createProgram).toHaveBeenCalledTimes(2);
+    expect(cache.getProgram('vert-a', 'frag-a')).toBeDefined();
+    expect(gl.createProgram).toHaveBeenCalledTimes(2); // still cached
+
+    vi.restoreAllMocks();
+  });
+
+  // -------------------------------------------------------------------------
   // retainProgram / releaseProgram
   // -------------------------------------------------------------------------
 

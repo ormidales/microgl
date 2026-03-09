@@ -634,6 +634,25 @@ describe('loadGltf', () => {
     expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
   });
 
+  it('throws a descriptive error when multiple URI-less buffers are declared (buffer index included)', async () => {
+    // A malformed GLB that declares two buffers without URIs is invalid:
+    // only one embedded binary chunk exists and it must not be reused.
+    const { json, bin } = triangleAsset();
+    json.buffers = [
+      { byteLength: bin.byteLength },   // buffer 0 – consumed by binChunk
+      { byteLength: bin.byteLength },   // buffer 1 – no URI, should trigger error
+    ];
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    // Error message must name the offending buffer index (1)
+    expect((err as Error).message).toMatch(/Buffer 1/);
+    // Error message must mention the binary chunk already being consumed
+    expect((err as Error).message).toMatch(/already been consumed/);
+  });
+
   it('resolves external buffer URIs via callback', async () => {
     const { json, bin } = triangleAsset();
     json.buffers = [{ uri: 'triangle.bin', byteLength: bin.byteLength }];

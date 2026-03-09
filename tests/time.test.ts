@@ -63,6 +63,36 @@ describe('Time', () => {
     expect(time.elapsed).toBe((frameCount * frameMs) / 1000);
   });
 
+  it('does not advance elapsed while paused', () => {
+    const time = new Time();
+    time.update(1000);
+    time.update(2000); // elapsed = 1 s
+    time.pause(2000);
+    time.update(7000); // 5 s into pause – elapsed must stay at 1 s
+    expect(time.elapsed).toBe(1);
+  });
+
+  it('resumes elapsed correctly after a pause', () => {
+    const time = new Time();
+    time.update(1000);
+    time.update(2000); // elapsed = 1 s
+    time.pause(2000);
+    time.resume(7000); // pause duration = 5 s
+    time.update(7500); // 0.5 s after resume
+    expect(time.elapsed).toBeCloseTo(1.5, 5);
+  });
+
+  it('elapsed is consistent across update calls during a pause', () => {
+    const time = new Time();
+    time.update(1000);
+    time.update(2000); // elapsed = 1 s
+    time.pause(2000);
+    time.update(3000);
+    time.update(4000);
+    // elapsed must be frozen at 1 s during both updates
+    expect(time.elapsed).toBe(1);
+  });
+
   it('requires explicit timestamps for pause and resume', () => {
     const time = new Time();
 

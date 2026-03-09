@@ -403,6 +403,34 @@ describe('readAccessorFloat', () => {
     expect(result).toBeInstanceOf(Float32Array);
     expect(Array.from(result)).toEqual([100, 200, 300, 400, 500, 600]);
   });
+
+  it('throws when tightly-packed GL_SHORT accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(8); // only 8 bytes, but accessor needs count*elementSize = 2*6 = 12
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_SHORT, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 8 }],
+      buffers: [{ byteLength: 8 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
+
+  it('throws when tightly-packed GL_UNSIGNED_BYTE accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(4); // only 4 bytes, but accessor needs count*elementSize = 2*3 = 6
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_BYTE, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+      buffers: [{ byteLength: 4 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
 });
 
 // ---------------------------------------------------------------------------

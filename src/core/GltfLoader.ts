@@ -524,24 +524,18 @@ export function readAccessorFloat(
     if (accessor.componentType === GL_FLOAT) {
       return new Float32Array(data, byteOffset, componentCount);
     }
+    const requiredBytes = accessor.count === 0 ? 0 : accessor.count * elementSize;
+    if (requiredBytes > byteLength) {
+      throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
+    }
     if (accessor.componentType === GL_SHORT) {
-      const requiredBytes = accessor.count === 0 ? 0 : accessor.count * elementSize;
-      if (requiredBytes > byteLength) {
-        throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
-      }
-      const src = new Int16Array(data, byteOffset, componentCount);
       const out = new Float32Array(componentCount);
-      for (let i = 0; i < componentCount; i++) out[i] = src[i];
+      out.set(new Int16Array(data, byteOffset, componentCount));
       return out;
     }
     if (accessor.componentType === GL_UNSIGNED_BYTE) {
-      const requiredBytes = accessor.count === 0 ? 0 : accessor.count * elementSize;
-      if (requiredBytes > byteLength) {
-        throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
-      }
-      const src = new Uint8Array(data, byteOffset, componentCount);
       const out = new Float32Array(componentCount);
-      for (let i = 0; i < componentCount; i++) out[i] = src[i];
+      out.set(new Uint8Array(data, byteOffset, componentCount));
       return out;
     }
   }

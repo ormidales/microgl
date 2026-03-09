@@ -1491,4 +1491,36 @@ describe('OrbitalCameraSystem', () => {
     expect(lineStep).toBeCloseTo(pageStep);
     expect(pixelStep).toBeCloseTo(0.0008);
   });
+
+  it('pagehide handler calls detach to remove all window listeners', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const windowListeners = new Map<string, EventListenerOrEventListenerObject>();
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListenerOrEventListenerObject) => {
+        windowListeners.set(type, handler);
+      },
+    );
+    (globalThis as any).window.removeEventListener = vi.fn();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+
+    // Simulate the pagehide handler that demos register
+    const pagehideHandler = (): void => { sys.detach(); };
+    pagehideHandler();
+
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'mouseup',
+      expect.any(Function),
+    );
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'touchend',
+      expect.any(Function),
+      { passive: true },
+    );
+  });
 });

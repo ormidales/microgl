@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 const layoutSource = readFileSync(new URL('../src/demoLayout.ts', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
 const gltfDemoSource = readFileSync(new URL('../src/demos/gltf.ts', import.meta.url), 'utf8');
+const cameraDemoSource = readFileSync(new URL('../src/demos/camera.ts', import.meta.url), 'utf8');
+const transformDemoSource = readFileSync(new URL('../src/demos/transform.ts', import.meta.url), 'utf8');
 const themeCss = readFileSync(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
+const orbitalSystemSource = readFileSync(new URL('../src/core/ecs/systems/OrbitalCameraSystem.ts', import.meta.url), 'utf8');
 
 describe('Demo scene layout', () => {
   it('defines a shared demo structure with top bar, back link, and FPS panel', () => {
@@ -54,5 +57,25 @@ describe('Demo scene layout', () => {
     expect(mediaBlock).toContain('flex-direction: column');
     expect(mediaBlock).toContain('position: static');
     expect(mediaBlock).toContain('pointer-events: none');
+  });
+
+  it('OrbitalCameraSystem.attach JSDoc warns that detach must be called on cleanup', () => {
+    expect(orbitalSystemSource).toContain('detach');
+    expect(orbitalSystemSource).toContain('pagehide');
+  });
+
+  it('camera demo calls cameraSystem.detach() on pagehide', () => {
+    expect(cameraDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(cameraDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('gltf demo calls cameraSystem.detach() on pagehide', () => {
+    expect(gltfDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(gltfDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('transform demo calls cameraSystem.detach() on pagehide', () => {
+    expect(transformDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(transformDemoSource).toContain('cameraSystem.detach()');
   });
 });

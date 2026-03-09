@@ -43,6 +43,7 @@ export function runCameraDemo(): void {
   const renderSystem = new RenderSystem(renderer, material);
   const cameraSystem = new OrbitalCameraSystem();
   cameraSystem.attach(renderer.canvas);
+  window.addEventListener('pagehide', () => { cameraSystem.detach(); }, { once: true });
   let renderLoopActive = true;
   renderer.onContextLost(() => {
     renderLoopActive = false;

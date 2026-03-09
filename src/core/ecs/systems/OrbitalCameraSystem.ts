@@ -91,7 +91,15 @@ export class OrbitalCameraSystem extends System {
   // DOM event binding
   // ---------------------------------------------------------------------------
 
-  /** Start listening to mouse/wheel events on the given canvas. */
+  /**
+   * Start listening to mouse/wheel/touch events on the given canvas.
+   *
+   * **Important:** always call {@link detach} when the owning scene is torn
+   * down (e.g. in a `pagehide` handler or equivalent cleanup path).  Failing
+   * to do so leaves `mouseup` and `touchend` listeners registered on `window`
+   * indefinitely, which leaks memory and produces ghost input events on every
+   * subsequent scene reload.
+   */
   attach(canvas: HTMLCanvasElement): void {
     this.detach();
     this.canvas = canvas;

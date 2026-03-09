@@ -126,11 +126,21 @@ export function runGltfDemo(): void {
   const cameraComponent = new CameraComponent();
   em.addComponent(camera, cameraComponent);
 
+  let loadController: AbortController | null = null;
+
   const loadModel = async (): Promise<void> => {
+    loadController?.abort();
+    loadController = new AbortController();
+    const { signal } = loadController;
+
+    statusValue.textContent = 'Loading...';
+
     try {
-      const response = await fetch(MODEL_URL);
+      const response = await fetch(MODEL_URL, { signal });
+      if (signal.aborted) return;
       if (!response.ok) throw new Error(`Failed to fetch ${MODEL_URL}: ${response.status}`);
       const { meshes } = await loadGltf(await response.arrayBuffer());
+      if (signal.aborted) return;
       if (meshes.length === 0) throw new Error('No primitives found in glTF.');
 
       const center = getModelCenter(meshes);
@@ -149,6 +159,7 @@ export function runGltfDemo(): void {
 
       statusValue.textContent = `Loaded ${meshes.length} primitive(s)`;
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return;
       statusValue.textContent = 'Load failed';
       console.error(error);
     }

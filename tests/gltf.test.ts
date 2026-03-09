@@ -8,7 +8,7 @@ import {
 } from '../src/core/GltfLoader';
 import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset, GltfComponentType } from '../src/core/GltfTypes';
-import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT } from '../src/core/GltfTypes';
+import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT, GL_SHORT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
 
 // ---------------------------------------------------------------------------
@@ -347,6 +347,89 @@ describe('readAccessorFloat', () => {
 
     expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/Accessor 0/);
     expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/9999/);
+  });
+
+  it('reads tightly-packed GL_SHORT VEC3 via TypedArray fast path', () => {
+    const src = new Int16Array([10, 20, 30, 40, 50, 60]);
+    const bin = src.buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_SHORT, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 12 }],
+      buffers: [{ byteLength: 12 }],
+    };
+
+    const result = readAccessorFloat(json, [bin], 0);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(Array.from(result)).toEqual([10, 20, 30, 40, 50, 60]);
+  });
+
+  it('reads tightly-packed GL_UNSIGNED_BYTE VEC3 via TypedArray fast path', () => {
+    const src = new Uint8Array([1, 2, 3, 4, 5, 6]);
+    const bin = src.buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_BYTE, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 6 }],
+      buffers: [{ byteLength: 6 }],
+    };
+
+    const result = readAccessorFloat(json, [bin], 0);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(Array.from(result)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('falls back to DataView for interleaved GL_SHORT accessor', () => {
+    // byteStride=8 with a VEC3 GL_SHORT (elementSize=6) → interleaved, 2-byte gap between elements
+    const raw = new Uint8Array(16);
+    const view = new DataView(raw.buffer);
+    view.setInt16(0, 100, true); view.setInt16(2, 200, true); view.setInt16(4, 300, true);
+    view.setInt16(8, 400, true); view.setInt16(10, 500, true); view.setInt16(12, 600, true);
+    const bin = raw.buffer as ArrayBuffer;
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_SHORT, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 16, byteStride: 8 }],
+      buffers: [{ byteLength: 16 }],
+    };
+
+    const result = readAccessorFloat(json, [bin], 0);
+    expect(result).toBeInstanceOf(Float32Array);
+    expect(Array.from(result)).toEqual([100, 200, 300, 400, 500, 600]);
+  });
+
+  it('throws when tightly-packed GL_SHORT accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(8); // only 8 bytes, but accessor needs count*elementSize = 2*6 = 12
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_SHORT, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 8 }],
+      buffers: [{ byteLength: 8 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
+  });
+
+  it('throws when tightly-packed GL_UNSIGNED_BYTE accessor exceeds its bufferView bounds', () => {
+    const bin = new ArrayBuffer(4); // only 4 bytes, but accessor needs count*elementSize = 2*3 = 6
+    const json: GltfAsset = {
+      asset: { version: '2.0' },
+      accessors: [
+        { bufferView: 0, componentType: GL_UNSIGNED_BYTE, count: 2, type: 'VEC3' },
+      ],
+      bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 4 }],
+      buffers: [{ byteLength: 4 }],
+    };
+
+    expect(() => readAccessorFloat(json, [bin], 0)).toThrow(/exceeds available buffer bounds/);
   });
 });
 

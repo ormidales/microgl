@@ -515,11 +515,29 @@ export function readAccessorFloat(
   }
   const { elementSize, componentOffsets } = elementLayout;
 
-  // Fast path: tightly packed floats – just wrap
+  // Fast path: tightly packed types – non-matrix types only (matrix columns may
+  // carry alignment padding that makes a flat TypedArray view incorrect).
   const expectedStride = elementSize;
   const isTightlyPacked = byteStride === 0 || byteStride === expectedStride;
-  if (accessor.componentType === GL_FLOAT && isTightlyPacked) {
-    return new Float32Array(data, byteOffset, componentCount);
+  const isNonMatrix = !accessor.type.startsWith('MAT');
+  if (isTightlyPacked && isNonMatrix) {
+    if (accessor.componentType === GL_FLOAT) {
+      return new Float32Array(data, byteOffset, componentCount);
+    }
+    const requiredBytes = accessor.count === 0 ? 0 : accessor.count * elementSize;
+    if (requiredBytes > byteLength) {
+      throw new Error(`Accessor ${accessorIndex} exceeds available buffer bounds.`);
+    }
+    if (accessor.componentType === GL_SHORT) {
+      const out = new Float32Array(componentCount);
+      out.set(new Int16Array(data, byteOffset, componentCount));
+      return out;
+    }
+    if (accessor.componentType === GL_UNSIGNED_BYTE) {
+      const out = new Float32Array(componentCount);
+      out.set(new Uint8Array(data, byteOffset, componentCount));
+      return out;
+    }
   }
 
   // Slow path: stride or type conversion

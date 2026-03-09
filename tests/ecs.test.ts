@@ -606,12 +606,13 @@ describe('RenderSystem', () => {
 
   function createRenderSystemWithMocks(
     onMeshBufferAllocationFailure?: (message: string) => void,
+    isContextLost = false,
   ) {
     const gl = createMockGL();
     const material = createMockMaterial();
-    const renderer = { gl };
+    const renderer = { gl, isContextLost };
     const sys = new RenderSystem(renderer as any, material as any, onMeshBufferAllocationFailure);
-    return { gl, material, sys };
+    return { gl, material, renderer, sys };
   }
 
   it('declares required components', () => {
@@ -981,6 +982,49 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
 
     expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensureMeshBuffers returns null and skips draw calls during context loss', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array([0, 1, 2])),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks(undefined, true);
+    sys.update(em, 0.016);
+
+    // No buffers should have been allocated and no draw calls issued
+    expect(gl.createVertexArray).not.toHaveBeenCalled();
+    expect(gl.createBuffer).not.toHaveBeenCalled();
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+    expect(gl.drawElements).not.toHaveBeenCalled();
+  });
+
+  it('render loop resumes normally after context is restored', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, renderer, sys } = createRenderSystemWithMocks(undefined, true);
+
+    // Update during context loss — no draw calls expected
+    sys.update(em, 0.016);
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+
+    // Simulate context restoration
+    renderer.isContextLost = false;
+    sys.resetGpuResources();
+    sys.update(em, 0.016);
+
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.drawArrays).toHaveBeenCalledTimes(1);
   });
 
   it('resetGpuResources does not call gl.delete* (context-loss safe)', () => {

@@ -1606,4 +1606,58 @@ describe('buildNodeLocalMatrix', () => {
     expect(result.nodes[1].localMatrix[13]).toBe(2);
     expect(result.nodes[1].localMatrix[14]).toBe(3);
   });
+
+  it('warns and normalizes a non-unit quaternion', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Quaternion with length 2 (doubles each component of identity)
+    const result = buildNodeLocalMatrix({ name: 'BadQ', rotation: [0, 0, 0, 2] });
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('BadQ');
+    expect(warnSpy.mock.calls[0][0]).toContain('normalizing');
+    // After normalizing [0,0,0,2] → [0,0,0,1] which is the identity rotation
+    expect(result).toEqual(IDENTITY);
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn for a quaternion within the 1e-4 tolerance', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Nearly unit quaternion; deviation < 1e-4
+    buildNodeLocalMatrix({ rotation: [0, 0, 0, 1.00005] });
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('throws in strict mode for a non-unit quaternion', () => {
+    expect(() =>
+      buildNodeLocalMatrix({ name: 'StrictNode', rotation: [0, 0, 0, 2] }, { strict: true }),
+    ).toThrow('StrictNode');
+  });
+
+  it('does not throw in strict mode for a valid unit quaternion', () => {
+    const s = Math.sin(Math.PI / 4);
+    const c = Math.cos(Math.PI / 4);
+    expect(() =>
+      buildNodeLocalMatrix({ rotation: [0, 0, s, c] }, { strict: true }),
+    ).not.toThrow();
+  });
+
+  it('loadGltf strict option propagates and throws for non-unit quaternion', async () => {
+    const { json, bin } = triangleAsset();
+    json.nodes = [{ name: 'BadQ', rotation: [0, 0, 0, 2] }];
+    json.buffers = [{ byteLength: bin.byteLength }];
+    const glb = buildGlb(json, bin);
+    await expect(loadGltf(glb, { strict: true })).rejects.toThrow('BadQ');
+  });
+
+  it('loadGltf warns (not throws) for non-unit quaternion without strict mode', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { json, bin } = triangleAsset();
+    json.nodes = [{ name: 'BadQ', rotation: [0, 0, 0, 2] }];
+    json.buffers = [{ byteLength: bin.byteLength }];
+    const glb = buildGlb(json, bin);
+    const result = await loadGltf(glb);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(result.nodes[0].localMatrix).toEqual(IDENTITY);
+    warnSpy.mockRestore();
+  });
 });

@@ -41,6 +41,11 @@ export interface GltfLoaderOptions {
   maxJsonBufferBytes?: number;
   /** When true, each VEC3 normal is normalized to unit length after loading. */
   normalizeNormals?: boolean;
+  /**
+   * When true, a non-unit quaternion encountered during node matrix construction
+   * throws an `Error` instead of logging a warning and normalizing automatically.
+   */
+  strict?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +91,7 @@ export async function loadGltf(
     }
   }
 
-  return { meshes, nodes: (json.nodes ?? []).map(attachLocalMatrix) };
+  return { meshes, nodes: (json.nodes ?? []).map((n) => attachLocalMatrix(n, options)) };
 }
 
 /**
@@ -288,8 +293,16 @@ const IDENTITY_MAT4: readonly number[] = [
  *  3. TRS components – composed as T × R × S with identity defaults for any
  *     missing component (`translation` → [0,0,0], `rotation` → [0,0,0,1],
  *     `scale` → [1,1,1]).
+ *
+ * @param node The glTF node descriptor.
+ * @param options Optional configuration forwarded from `loadGltf`.
+ *   - `strict`: when `true`, a non-unit quaternion throws an `Error` instead of
+ *     being silently normalized.
  */
-export function buildNodeLocalMatrix(node: GltfNode): number[] {
+export function buildNodeLocalMatrix(
+  node: GltfNode,
+  options?: Pick<GltfLoaderOptions, 'strict'>,
+): number[] {
   // 1. Explicit matrix
   if (node.matrix && node.matrix.length === 16) {
     return node.matrix.slice();
@@ -305,10 +318,29 @@ export function buildNodeLocalMatrix(node: GltfNode): number[] {
   const ty = node.translation?.[1] ?? 0;
   const tz = node.translation?.[2] ?? 0;
 
-  const qx = node.rotation?.[0] ?? 0;
-  const qy = node.rotation?.[1] ?? 0;
-  const qz = node.rotation?.[2] ?? 0;
-  const qw = node.rotation?.[3] ?? 1;
+  let qx = node.rotation?.[0] ?? 0;
+  let qy = node.rotation?.[1] ?? 0;
+  let qz = node.rotation?.[2] ?? 0;
+  let qw = node.rotation?.[3] ?? 1;
+
+  // Validate and normalize the quaternion if it deviates from unit length.
+  if (node.rotation) {
+    const len = Math.hypot(qx, qy, qz, qw);
+    if (Math.abs(len - 1) > 1e-4) {
+      if (options?.strict) {
+        throw new Error(
+          `Node "${node.name}": quaternion not normalized (length=${len.toFixed(6)})`,
+        );
+      }
+      console.warn(
+        `Node "${node.name}": quaternion not normalized (length=${len.toFixed(6)}), normalizing.`,
+      );
+      qx /= len;
+      qy /= len;
+      qz /= len;
+      qw /= len;
+    }
+  }
 
   const sx = node.scale?.[0] ?? 1;
   const sy = node.scale?.[1] ?? 1;
@@ -338,8 +370,11 @@ export function buildNodeLocalMatrix(node: GltfNode): number[] {
 }
 
 /** Return a shallow copy of `node` with `localMatrix` attached. */
-function attachLocalMatrix(node: GltfNode): GltfNodeWithMatrix {
-  return { ...node, localMatrix: buildNodeLocalMatrix(node) };
+function attachLocalMatrix(
+  node: GltfNode,
+  options?: Pick<GltfLoaderOptions, 'strict'>,
+): GltfNodeWithMatrix {
+  return { ...node, localMatrix: buildNodeLocalMatrix(node, options) };
 }
 
 // ---------------------------------------------------------------------------

@@ -18,4 +18,11 @@ describe('Demos page', () => {
     expect(demosHtml).toMatch(/<a href="\/gallery\.html#orbital-camera-control">Open demo<\/a>/);
     expect(demosHtml).toMatch(/<a href="\/gallery\.html#mesh-render-loop">Open demo<\/a>/);
   });
+
+  it('nav uses ul/li list structure with aria-label', () => {
+    expect(demosHtml).toContain('<nav aria-label="Main">');
+    expect(demosHtml).toContain('<ul>');
+    expect(demosHtml).toContain('<li><a href="/index.html">Home</a></li>');
+    expect(demosHtml).toContain('<li><a href="/gallery.html">Gallery</a></li>');
+  });
 });

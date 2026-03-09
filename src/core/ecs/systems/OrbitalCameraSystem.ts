@@ -91,7 +91,15 @@ export class OrbitalCameraSystem extends System {
   // DOM event binding
   // ---------------------------------------------------------------------------
 
-  /** Start listening to mouse/wheel events on the given canvas. */
+  /**
+   * Start listening to mouse/wheel/touch events on the given canvas.
+   *
+   * **Important:** always call {@link detach} when the owning scene is torn
+   * down (e.g. in a `pagehide` handler or equivalent cleanup path).  Failing
+   * to do so leaves `mouseup` and `touchend` listeners registered on `window`
+   * indefinitely, which leaks memory and produces ghost input events on every
+   * subsequent scene reload.
+   */
   attach(canvas: HTMLCanvasElement): void {
     this.detach();
     this.canvas = canvas;
@@ -142,7 +150,6 @@ export class OrbitalCameraSystem extends System {
   // ---------------------------------------------------------------------------
 
   update(em: EntityManager, _deltaTime: number): void {
-    const entities = em.getEntitiesWith(...this.requiredComponents);
     const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
     const aspectChanged = aspect !== this.lastAspect;
     const hasInputDelta = this.deltaTheta !== 0 || this.deltaPhi !== 0 || this.deltaZoom !== 0;
@@ -154,9 +161,9 @@ export class OrbitalCameraSystem extends System {
     // lookAt up-vector well-defined and prevents gimbal flip or camera jitter.
     const phiMin = (90 - this.maxElevationDeg) * (Math.PI / 180);
 
-    for (const id of entities) {
+    em.forEachEntityWith(this.requiredComponents, (id) => {
       const cam = em.getComponent<CameraComponent>(id, 'Camera');
-      if (!cam) continue;
+      if (!cam) return;
 
       // Apply accumulated input deltas
       cam.theta += this.deltaTheta;
@@ -171,7 +178,7 @@ export class OrbitalCameraSystem extends System {
 
       const shouldRebuildMatrices =
         hasInputDelta || aspectChanged || !this.initializedCameras.has(id);
-      if (!shouldRebuildMatrices) continue;
+      if (!shouldRebuildMatrices) return;
 
       // Spherical → Cartesian
       const sinPhi = Math.sin(cam.phi);
@@ -186,7 +193,7 @@ export class OrbitalCameraSystem extends System {
       // Rebuild projection (aspect may change on resize)
       mat4.perspective(cam.projection, cam.fov, aspect, cam.near, cam.far);
       this.initializedCameras.add(id);
-    }
+    });
 
     this.lastAspect = aspect;
 

@@ -13,7 +13,37 @@ import type { mat4 } from 'gl-matrix';
 // Default shaders
 // ---------------------------------------------------------------------------
 
-/** Minimal pass-through vertex shader. */
+/**
+ * Default GLSL ES 3.00 vertex shader used by {@link Material}.
+ *
+ * **Attributes**
+ * - `a_position` (`vec4`, location 0) – clip-space position of each vertex.
+ *
+ * **Uniforms**
+ * - `u_model` (`mat4`) – model (world) transform matrix.
+ * - `u_view` (`mat4`) – view (camera) transform matrix.
+ * - `u_projection` (`mat4`) – projection matrix.
+ *
+ * Override this shader by passing a custom GLSL string as the second argument
+ * to the {@link Material} constructor:
+ *
+ * ```ts
+ * import { Material, DEFAULT_FRAGMENT_SOURCE } from './core';
+ *
+ * const myVertexShader = `#version 300 es
+ * layout(location = 0) in vec4 a_position;
+ * uniform mat4 u_model;
+ * uniform mat4 u_view;
+ * uniform mat4 u_projection;
+ * void main() {
+ *   // custom transform logic here
+ *   gl_Position = u_projection * u_view * u_model * a_position;
+ * }
+ * `;
+ *
+ * const material = new Material(gl, myVertexShader, DEFAULT_FRAGMENT_SOURCE);
+ * ```
+ */
 export const DEFAULT_VERTEX_SOURCE = `#version 300 es
 layout(location = 0) in vec4 a_position;
 
@@ -26,7 +56,34 @@ void main() {
 }
 `;
 
-/** Solid-color fragment shader. */
+/**
+ * Default GLSL ES 3.00 fragment shader used by {@link Material}.
+ *
+ * **Uniforms**
+ * - `u_color` (`vec4`) – RGBA output color (`r, g, b, a` each in `[0, 1]`).
+ *
+ * **Outputs**
+ * - `fragColor` (`vec4`) – final fragment color written to the default color attachment.
+ *
+ * Override this shader by passing a custom GLSL string as the third argument
+ * to the {@link Material} constructor:
+ *
+ * ```ts
+ * import { Material, DEFAULT_VERTEX_SOURCE } from './core';
+ *
+ * const myFragmentShader = `#version 300 es
+ * precision mediump float;
+ * uniform vec4 u_color;
+ * out vec4 fragColor;
+ * void main() {
+ *   // custom shading logic here
+ *   fragColor = u_color;
+ * }
+ * `;
+ *
+ * const material = new Material(gl, DEFAULT_VERTEX_SOURCE, myFragmentShader);
+ * ```
+ */
 export const DEFAULT_FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
 

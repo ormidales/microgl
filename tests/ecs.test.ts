@@ -439,8 +439,79 @@ describe('EntityManager', () => {
 });
 
 // ---------------------------------------------------------------------------
-// System.safeUpdate
+// forEachEntityWith
 // ---------------------------------------------------------------------------
+
+describe('EntityManager.forEachEntityWith', () => {
+  it('visits all matching entities and none of the non-matching ones', () => {
+    const em = new EntityManager();
+    const a = em.createEntity();
+    const b = em.createEntity();
+    const c = em.createEntity();
+
+    em.addComponent(a, new TransformComponent());
+    em.addComponent(a, new MeshComponent());
+    em.addComponent(b, new TransformComponent());
+    em.addComponent(c, new MeshComponent());
+
+    const visited: number[] = [];
+    em.forEachEntityWith(['Transform', 'Mesh'], (id) => visited.push(id));
+
+    expect(visited).toEqual([a]);
+  });
+
+  it('never invokes the callback when no entities match', () => {
+    const em = new EntityManager();
+    em.createEntity(); // no components
+
+    const visited: number[] = [];
+    em.forEachEntityWith(['Transform'], (id) => visited.push(id));
+
+    expect(visited).toHaveLength(0);
+  });
+
+  it('shares the cached view with getEntitiesWith for the same component set', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.forEachEntityWith(['Transform', 'Mesh'], () => {});
+    em.getEntitiesWith('Transform', 'Mesh');
+
+    // Both calls should resolve to the same view key — only one entry in the cache
+    expect((em as any).views.size).toBe(1);
+  });
+
+  it('keeps the callback-visited set in sync after components change', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    em.forEachEntityWith(['Transform'], () => {}); // populate cache
+
+    em.addComponent(id, new TransformComponent());
+    const first: number[] = [];
+    em.forEachEntityWith(['Transform'], (i) => first.push(i));
+    expect(first).toEqual([id]);
+
+    em.removeComponent(id, 'Transform');
+    const second: number[] = [];
+    em.forEachEntityWith(['Transform'], (i) => second.push(i));
+    expect(second).toHaveLength(0);
+  });
+
+  it('accepts a readonly string[] (e.g. from requiredComponents as const)', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+
+    const types = ['Transform'] as const;
+    const visited: number[] = [];
+    em.forEachEntityWith(types, (i) => visited.push(i));
+
+    expect(visited).toEqual([id]);
+  });
+});
 
 describe('System.safeUpdate', () => {
   it('does not rethrow errors thrown by update()', () => {
@@ -606,12 +677,13 @@ describe('RenderSystem', () => {
 
   function createRenderSystemWithMocks(
     onMeshBufferAllocationFailure?: (message: string) => void,
+    isContextLost = false,
   ) {
     const gl = createMockGL();
     const material = createMockMaterial();
-    const renderer = { gl };
+    const renderer = { gl, isContextLost };
     const sys = new RenderSystem(renderer as any, material as any, onMeshBufferAllocationFailure);
-    return { gl, material, sys };
+    return { gl, material, renderer, sys };
   }
 
   it('declares required components', () => {
@@ -662,7 +734,7 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
 
     const modelCall = material.setMat4.mock.calls.find(
-      (call: [string, Float32Array]) => call[0] === 'u_model',
+      (call) => call[0] === 'u_model',
     );
     expect(modelCall).toBeDefined();
 
@@ -948,7 +1020,7 @@ describe('RenderSystem', () => {
 
     const onFailure = vi.fn();
     const { gl, sys } = createRenderSystemWithMocks(onFailure);
-    vi.mocked(gl.createVertexArray).mockReturnValue(null);
+    vi.mocked(gl.createVertexArray).mockReturnValue(null as unknown as WebGLVertexArrayObject);
 
     sys.update(em, 0.016);
     expect(onFailure).not.toHaveBeenCalled();
@@ -970,10 +1042,10 @@ describe('RenderSystem', () => {
     const onFailure = vi.fn();
     const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray)
-      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject)
       .mockReturnValueOnce({} as WebGLVertexArrayObject)
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(null);
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject)
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject);
 
     sys.update(em, 0.016);
     sys.update(em, 0.016);
@@ -981,6 +1053,90 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
 
     expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it('ensureMeshBuffers returns null and skips draw calls during context loss', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array([0, 1, 2])),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks(undefined, true);
+    sys.update(em, 0.016);
+
+    // No buffers should have been allocated and no draw calls issued
+    expect(gl.createVertexArray).not.toHaveBeenCalled();
+    expect(gl.createBuffer).not.toHaveBeenCalled();
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+    expect(gl.drawElements).not.toHaveBeenCalled();
+  });
+
+  it('render loop resumes normally after context is restored', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, renderer, sys } = createRenderSystemWithMocks(undefined, true);
+
+    // Update during context loss — no draw calls expected
+    sys.update(em, 0.016);
+    expect(gl.drawArrays).not.toHaveBeenCalled();
+
+    // Simulate context restoration
+    renderer.isContextLost = false;
+    sys.resetGpuResources();
+    sys.update(em, 0.016);
+
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(1);
+    expect(gl.drawArrays).toHaveBeenCalledTimes(1);
+  });
+
+  it('resetGpuResources does not call gl.delete* (context-loss safe)', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array([0, 1, 2])),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    // Simulate context loss: reset GPU resources without calling delete*
+    sys.resetGpuResources();
+
+    expect(gl.deleteBuffer).not.toHaveBeenCalled();
+    expect(gl.deleteVertexArray).not.toHaveBeenCalled();
+  });
+
+  it('resetGpuResources clears the buffer cache so it is rebuilt on next draw', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    // First draw allocated one VAO and one VBO
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(1);
+
+    sys.resetGpuResources();
+
+    // After reset the cache is empty, so the next draw must reallocate
+    sys.update(em, 0.016);
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1449,5 +1605,52 @@ describe('OrbitalCameraSystem', () => {
     expect(pixelStep).toBeCloseTo(lineStep);
     expect(lineStep).toBeCloseTo(pageStep);
     expect(pixelStep).toBeCloseTo(0.0008);
+  });
+
+  it('pagehide handler calls detach to remove all window listeners', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const windowListeners = new Map<string, EventListener>();
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+    (globalThis as any).window.removeEventListener = vi.fn();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+
+    // Register the same pagehide handler the demos use
+    window.addEventListener('pagehide', () => { sys.detach(); }, { once: true });
+
+    expect((globalThis as any).window.addEventListener).toHaveBeenCalledWith(
+      'pagehide',
+      expect.any(Function),
+      { once: true },
+    );
+
+    // Invoke the captured pagehide handler to simulate the page being hidden
+    const pagehideHandler = windowListeners.get('pagehide');
+    expect(pagehideHandler).toBeDefined();
+    pagehideHandler!(new Event('pagehide'));
+
+    const mouseupHandler = windowListeners.get('mouseup');
+    const touchendHandler = windowListeners.get('touchend');
+    expect(mouseupHandler).toBeDefined();
+    expect(touchendHandler).toBeDefined();
+
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'mouseup',
+      mouseupHandler,
+    );
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'touchend',
+      touchendHandler,
+      { passive: true },
+    );
   });
 });

@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 const layoutSource = readFileSync(new URL('../src/demoLayout.ts', import.meta.url), 'utf8');
 const mainSource = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
 const gltfDemoSource = readFileSync(new URL('../src/demos/gltf.ts', import.meta.url), 'utf8');
+const cameraDemoSource = readFileSync(new URL('../src/demos/camera.ts', import.meta.url), 'utf8');
+const transformDemoSource = readFileSync(new URL('../src/demos/transform.ts', import.meta.url), 'utf8');
+const stressDemoSource = readFileSync(new URL('../src/demos/stress.ts', import.meta.url), 'utf8');
 const themeCss = readFileSync(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
+const orbitalSystemSource = readFileSync(new URL('../src/core/ecs/systems/OrbitalCameraSystem.ts', import.meta.url), 'utf8');
 
 describe('Demo scene layout', () => {
   it('defines a shared demo structure with top bar, back link, and FPS panel', () => {
@@ -23,9 +27,18 @@ describe('Demo scene layout', () => {
 
   it('loads a glb model asynchronously and maps primitives to mesh entities', () => {
     expect(gltfDemoSource).toContain("const MODEL_URL = '/models/quad.glb'");
-    expect(gltfDemoSource).toContain('await fetch(MODEL_URL)');
+    expect(gltfDemoSource).toContain('await fetch(MODEL_URL, { signal })');
     expect(gltfDemoSource).toContain('await loadGltf(await response.arrayBuffer())');
     expect(gltfDemoSource).toContain('new MeshComponent(mesh.positions, mesh.indices, mesh.normals, mesh.uvs, mesh.min, mesh.max)');
+  });
+
+  it('guards loadModel against concurrent calls with AbortController', () => {
+    expect(gltfDemoSource).toContain('let loadController: AbortController | null = null');
+    expect(gltfDemoSource).toContain('loadController?.abort()');
+    expect(gltfDemoSource).toContain('loadController = new AbortController()');
+    expect(gltfDemoSource).toContain('const { signal } = loadController');
+    expect(gltfDemoSource).toContain('if (signal.aborted) return');
+    expect(gltfDemoSource).toContain("(error as Error).name === 'AbortError'");
   });
 
   it('provides shared theme styles for demo layout elements', () => {
@@ -54,5 +67,53 @@ describe('Demo scene layout', () => {
     expect(mediaBlock).toContain('flex-direction: column');
     expect(mediaBlock).toContain('position: static');
     expect(mediaBlock).toContain('pointer-events: none');
+  });
+
+  it('OrbitalCameraSystem.attach JSDoc warns that detach must be called on cleanup', () => {
+    expect(orbitalSystemSource).toContain('detach');
+    expect(orbitalSystemSource).toContain('pagehide');
+  });
+
+  it('camera demo calls cameraSystem.detach() on pagehide', () => {
+    expect(cameraDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(cameraDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('gltf demo calls cameraSystem.detach() on pagehide', () => {
+    expect(gltfDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(gltfDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('transform demo calls cameraSystem.detach() on pagehide', () => {
+    expect(transformDemoSource).toContain("window.addEventListener('pagehide'");
+    expect(transformDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('camera demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = cameraDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = cameraDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('stress demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = stressDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = stressDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('gltf demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = gltfDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = gltfDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('transform demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = transformDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = transformDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
   });
 });

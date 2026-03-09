@@ -3,8 +3,8 @@ import viteConfig from '../vite.config';
 
 describe('Vite config', () => {
   it('externalizes gl-matrix from rollup bundle', () => {
-    const config = typeof viteConfig === 'function' ? viteConfig({} as never) : viteConfig;
-    const external = config.build?.rollupOptions?.external;
+    const config = viteConfig;
+    const external = config.build?.rollupOptions?.external as ((id: string) => boolean) | undefined;
 
     expect(typeof external).toBe('function');
     expect(external?.('gl-matrix')).toBe(true);
@@ -18,7 +18,7 @@ describe('Vite config', () => {
   });
 
   it('declares multiple HTML entry points', () => {
-    const config = typeof viteConfig === 'function' ? viteConfig({} as never) : viteConfig;
+    const config = viteConfig;
     const input = config.build?.rollupOptions?.input as Record<string, string> | undefined;
 
     expect(input).toBeDefined();

@@ -84,12 +84,14 @@ export function runTransformDemo(): void {
   const cameraSystem = new OrbitalCameraSystem();
   const rotateCubeSystem = new RotateCubeSystem(rotationXValue, rotationYValue);
   cameraSystem.attach(renderer.canvas);
+  window.addEventListener('pagehide', () => { cameraSystem.detach(); }, { once: true });
   let renderLoopActive = true;
   renderer.onContextLost(() => {
     renderLoopActive = false;
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
+    time.reset();
     material.restore(gl);
     renderSystem.resetGpuResources();
     renderLoopActive = true;

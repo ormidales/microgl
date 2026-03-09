@@ -61,7 +61,10 @@ export class Time {
       (nowMs - this.last) / 1000,
       this.maxDeltaTimeSeconds,
     );
-    this.elapsed = (nowMs - this.origin - this.totalPausedMs) / 1000;
+    const currentPausedMs = this.pausedAt !== null
+      ? Math.max(0, nowMs - this.pausedAt)
+      : 0;
+    this.elapsed = (nowMs - this.origin - this.totalPausedMs - currentPausedMs) / 1000;
     this.last = nowMs;
   }
 
@@ -86,7 +89,12 @@ export class Time {
     }
   }
 
-  /** Reset all counters. */
+  /**
+   * Reset all counters.
+   *
+   * Call this inside a WebGL `onContextRestored` handler to prevent a large
+   * `elapsed` drift caused by the gap between context loss and restoration.
+   */
   reset(): void {
     this.deltaTime = 0;
     this.elapsed = 0;

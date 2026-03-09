@@ -143,10 +143,31 @@ export class EntityManager {
   // ---------------------------------------------------------------------------
 
   /**
+   * Invoke `cb` once for every entity that possesses **every** component type
+   * listed in `types`.  Iterates directly over the cached view's `Set` without
+   * allocating a temporary array, making it suitable for use in hot loops such
+   * as render and physics updates.
+   */
+  forEachEntityWith(types: readonly string[], cb: (entity: EntityId) => void): void {
+    for (const id of this.getOrCreateView(types).entities) {
+      cb(id);
+    }
+  }
+
+  /**
    * Return all entity ids that possess **every** component type listed.
+   *
+   * @deprecated Prefer {@link forEachEntityWith} in hot loops — this method
+   * allocates a new array on every call, which increases GC pressure at high
+   * frame rates.  `getEntitiesWith` is kept for convenience and backward
+   * compatibility.
    */
   getEntitiesWith(...componentTypes: string[]): EntityId[] {
-    const key = this.getViewKey(componentTypes);
+    return [...this.getOrCreateView(componentTypes).entities];
+  }
+
+  private getOrCreateView(types: readonly string[]): { componentTypes: string[]; entities: Set<EntityId> } {
+    const key = this.getViewKey(types);
     let view = this.views.get(key);
     if (!view) {
       const normalizedTypes = key ? key.split('|') : [];
@@ -167,10 +188,10 @@ export class EntityManager {
         keys.add(key);
       }
     }
-    return [...view.entities];
+    return view;
   }
 
-  private getViewKey(componentTypes: string[]): string {
+  private getViewKey(componentTypes: readonly string[]): string {
     if (componentTypes.length === 0) return '';
     if (componentTypes.length === 1) return componentTypes[0];
 

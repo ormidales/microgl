@@ -186,7 +186,6 @@ export class RenderSystem extends System {
     const camera = cameraEntity !== undefined
       ? em.getComponent<CameraComponent>(cameraEntity, 'Camera')
       : undefined;
-    const entities = em.getEntitiesWith(...this.requiredComponents);
     const activeMeshes = new Set<MeshComponent>();
 
     this.material.use();
@@ -194,10 +193,10 @@ export class RenderSystem extends System {
     this.material.setMat4('u_view', camera?.view ?? this.identity);
     this.material.setMat4('u_projection', camera?.projection ?? this.identity);
 
-    for (const id of entities) {
+    em.forEachEntityWith(this.requiredComponents, (id) => {
       const transform = em.getComponent<TransformComponent>(id, 'Transform');
       const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
-      if (!transform || !mesh || mesh.vertices.length === 0) continue;
+      if (!transform || !mesh || mesh.vertices.length === 0) return;
       activeMeshes.add(mesh);
 
       if (transform.needsModelMatrixUpdate()) {
@@ -221,7 +220,7 @@ export class RenderSystem extends System {
       this.material.setMat4('u_model', transform.modelMatrix);
 
       const buffers = this.ensureMeshBuffers(gl, mesh);
-      if (!buffers) continue;
+      if (!buffers) return;
 
       gl.bindVertexArray(buffers.vao);
       if (buffers.indexCount > 0) {
@@ -230,7 +229,7 @@ export class RenderSystem extends System {
         gl.drawArrays(gl.TRIANGLES, 0, buffers.vertexCount);
       }
       gl.bindVertexArray(null);
-    }
+    });
 
     for (const [mesh] of this.meshBuffers) {
       if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
@@ -246,10 +245,10 @@ export class RenderSystem extends System {
     const gl = this.renderer?.gl;
     if (!gl || this.meshBuffers.size === 0) return;
     const activeMeshes = new Set<MeshComponent>();
-    for (const id of em.getEntitiesWith(...this.requiredComponents)) {
+    em.forEachEntityWith(this.requiredComponents, (id) => {
       const mesh = em.getComponent<MeshComponent>(id, 'Mesh');
       if (mesh) activeMeshes.add(mesh);
-    }
+    });
     for (const [mesh] of this.meshBuffers) {
       if (!activeMeshes.has(mesh)) this.releaseMeshBuffers(gl, mesh);
     }

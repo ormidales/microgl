@@ -137,7 +137,6 @@ export function runGltfDemo(): void {
 
     try {
       const response = await fetch(MODEL_URL, { signal });
-      if (signal.aborted) return;
       if (!response.ok) throw new Error(`Failed to fetch ${MODEL_URL}: ${response.status}`);
       const { meshes } = await loadGltf(await response.arrayBuffer());
       if (signal.aborted) return;

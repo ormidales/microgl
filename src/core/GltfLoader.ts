@@ -199,7 +199,7 @@ async function resolveBuffers(
     const buf = gltfBuffers[i];
 
     if (buf.uri === undefined) {
-      // GLB embedded buffer (only the first buffer may have no URI)
+      // GLB embedded buffer (only one buffer may omit a URI and consume the binary chunk)
       if (!binChunk) {
         throw new Error(`Buffer ${i} has no URI and no GLB binary chunk is available.`);
       }

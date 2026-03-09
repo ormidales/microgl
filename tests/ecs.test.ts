@@ -1491,4 +1491,51 @@ describe('OrbitalCameraSystem', () => {
     expect(lineStep).toBeCloseTo(pageStep);
     expect(pixelStep).toBeCloseTo(0.0008);
   });
+
+  it('pagehide handler calls detach to remove all window listeners', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    const windowListeners = new Map<string, EventListener>();
+    (globalThis as any).window.addEventListener = vi.fn(
+      (type: string, handler: EventListener) => {
+        windowListeners.set(type, handler);
+      },
+    );
+    (globalThis as any).window.removeEventListener = vi.fn();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+
+    // Register the same pagehide handler the demos use
+    window.addEventListener('pagehide', () => { sys.detach(); }, { once: true });
+
+    expect((globalThis as any).window.addEventListener).toHaveBeenCalledWith(
+      'pagehide',
+      expect.any(Function),
+      { once: true },
+    );
+
+    // Invoke the captured pagehide handler to simulate the page being hidden
+    const pagehideHandler = windowListeners.get('pagehide');
+    expect(pagehideHandler).toBeDefined();
+    pagehideHandler!(new Event('pagehide'));
+
+    const mouseupHandler = windowListeners.get('mouseup');
+    const touchendHandler = windowListeners.get('touchend');
+    expect(mouseupHandler).toBeDefined();
+    expect(touchendHandler).toBeDefined();
+
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'mouseup',
+      mouseupHandler,
+    );
+    expect((globalThis as any).window.removeEventListener).toHaveBeenCalledWith(
+      'touchend',
+      touchendHandler,
+      { passive: true },
+    );
+  });
 });

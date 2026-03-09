@@ -366,12 +366,12 @@ describe('ShaderCache', () => {
       () => ({ __programId: programId++ }) as unknown as WebGLProgram,
     );
 
-    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+    vi.spyOn(ShaderCache as unknown as { hashSources: (v: string, f: string) => string }, 'hashSources').mockReturnValue(
       'collision-key',
     );
 
     cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
-    // Second pair collides; must be stored under its combinedSource string.
+    // Second pair collides; must be stored under its secondary-hash key.
     cache.getProgram('vert-b', 'frag-b');
 
     // getProgramKey must return the collision-free key for the second pair.
@@ -389,25 +389,25 @@ describe('ShaderCache', () => {
 
   it('collision-resolved entry survives after the hash-keyed program is removed', () => {
     // Regression test: removing the original hash-keyed program must not orphan
-    // the collision-resolved program (stored under combinedSource).  Both
+    // the collision-resolved program (stored under the secondary hash key).  Both
     // getProgramKey and getProgram must continue to point at the surviving entry.
     let programId = 0;
     (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
       () => ({ __programId: programId++ }) as unknown as WebGLProgram,
     );
 
-    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+    vi.spyOn(ShaderCache as unknown as { hashSources: (v: string, f: string) => string }, 'hashSources').mockReturnValue(
       'collision-key',
     );
 
     cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
-    const p2 = cache.getProgram('vert-b', 'frag-b'); // collision → stored under combinedSource
+    const p2 = cache.getProgram('vert-b', 'frag-b'); // collision → stored under secondary hash key
 
     // Remove the hash-keyed program so the hash slot is now vacant.
     cache.removeProgram('collision-key');
     expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
 
-    // getProgramKey must still return the combinedSource key for the second pair.
+    // getProgramKey must still return the secondary-hash key for the second pair.
     const keyB = cache.getProgramKey('vert-b', 'frag-b');
     expect(typeof keyB).toBe('string');
     // The key must reference the surviving entry — getProgram must not recompile.
@@ -612,8 +612,8 @@ describe('ShaderCache', () => {
       () => ({ __programId: programId++ }) as unknown as WebGLProgram,
     );
 
-    // Simulate a hash collision by forcing fnv1a to always return the same key.
-    vi.spyOn(ShaderCache as unknown as { fnv1a: (v: string) => string }, 'fnv1a').mockReturnValue(
+    // Simulate a hash collision by forcing hashSources to always return the same key.
+    vi.spyOn(ShaderCache as unknown as { hashSources: (v: string, f: string) => string }, 'hashSources').mockReturnValue(
       'collision-key',
     );
 

@@ -7,15 +7,64 @@ import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
   private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;
+  private static readonly FNV1A_OFFSET_BASIS_2 = 0x84222325;
   private static readonly FNV1A_PRIME = 0x01000193;
 
-  private static fnv1a(value: string): string {
+  /**
+   * Compute a primary cache key for a vertex/fragment source pair without
+   * allocating the combined source string. Uses FNV-1a with a 4-byte
+   * length-encoded boundary marker to prevent 'ab'+'c' from hashing the same
+   * as 'a'+'bc'.
+   */
+  private static hashSources(vertSrc: string, fragSrc: string): string {
     let hash = ShaderCache.FNV1A_OFFSET_BASIS;
-    for (let i = 0; i < value.length; i++) {
-      hash ^= value.charCodeAt(i);
+    const vLen = vertSrc.length;
+    for (let i = 0; i < vLen; i++) {
+      hash ^= vertSrc.charCodeAt(i);
+      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    }
+    hash ^= (vLen >>> 24) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= (vLen >>> 16) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= (vLen >>> 8) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= vLen & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    const fLen = fragSrc.length;
+    for (let i = 0; i < fLen; i++) {
+      hash ^= fragSrc.charCodeAt(i);
       hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
     }
     return `fnv1a-${(hash >>> 0).toString(16)}`;
+  }
+
+  /**
+   * Compute a secondary verification key using a different FNV-1a seed.
+   * Used for collision detection and as the collision-resolved cache key,
+   * avoiding any allocation of the full combined source string.
+   */
+  private static hashSources2(vertSrc: string, fragSrc: string): string {
+    let hash = ShaderCache.FNV1A_OFFSET_BASIS_2;
+    const vLen = vertSrc.length;
+    for (let i = 0; i < vLen; i++) {
+      hash ^= vertSrc.charCodeAt(i);
+      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    }
+    hash ^= (vLen >>> 24) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= (vLen >>> 16) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= (vLen >>> 8) & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash ^= vLen & 0xff;
+    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    const fLen = fragSrc.length;
+    for (let i = 0; i < fLen; i++) {
+      hash ^= fragSrc.charCodeAt(i);
+      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    }
+    return `fnv1a2-${(hash >>> 0).toString(16)}`;
   }
 
   /** key → compiled WebGLShader */
@@ -27,7 +76,7 @@ export class ShaderCache {
   private readonly programShaders: Map<string, [string, string]> = new Map();
   /** shader key → number of programs currently referencing it */
   private readonly shaderRefCounts: Map<string, number> = new Map();
-  /** program key → combined source string (only for auto-keyed entries, used to detect hash collisions) */
+  /** program key → secondary hash (only for auto-keyed entries; used to detect hash collisions) */
   private readonly programSources: Map<string, string> = new Map();
   /** program key → number of consumers currently retaining this program */
   private readonly programRefCounts: Map<string, number> = new Map();
@@ -68,34 +117,56 @@ export class ShaderCache {
    * @param key Optional cache key. Defaults to a hash of both sources.
    */
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
-    const combinedSource =
-      key === undefined
-        ? `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`
-        : undefined;
-    let cacheKey = key ?? ShaderCache.fnv1a(combinedSource!);
-
-    // For auto-keyed programs: if a collision-resolved entry (stored under
-    // combinedSource) already exists, return it directly.  This handles the
-    // case where the original hash-keyed program was later removed/released
-    // but the collision-resolved program under combinedSource remains cached.
-    if (combinedSource !== undefined) {
-      const collisionEntry = this.programs.get(combinedSource);
-      if (collisionEntry !== undefined) return collisionEntry;
+    // Explicit-key path: bypass auto-hashing entirely.
+    if (key !== undefined) {
+      const existing = this.programs.get(key);
+      if (existing !== undefined) return existing;
+      return this.compileAndCache(vertexSource, fragmentSource, key, undefined);
     }
 
-    const existing = this.programs.get(cacheKey);
-    if (existing !== undefined) {
-      // Guard against FNV-1a hash collisions: verify sources match before returning cache hit.
-      if (combinedSource !== undefined && this.programSources.get(cacheKey) !== combinedSource) {
-        // Collision detected: use the full combined source string as a collision-free key.
-        cacheKey = combinedSource;
-        const collisionExisting = this.programs.get(cacheKey);
-        if (collisionExisting !== undefined) return collisionExisting;
-      } else {
-        return existing;
+    // Auto-keyed path: compute both hashes without allocating combinedSource.
+    // hashSources  → primary cache key (used as the normal slot).
+    // hashSources2 → secondary key (collision verification + collision-resolved slot).
+    const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
+    const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
+
+    // 1. Check primary hash slot.
+    const primaryEntry = this.programs.get(hashKey);
+    if (primaryEntry !== undefined) {
+      // Verify this slot belongs to the same source pair via stored secondary hash.
+      if (this.programSources.get(hashKey) === secondaryKey) {
+        return primaryEntry; // ✅ cache hit — no combinedSource allocation
       }
+      // Primary hash collision: look up the collision-resolved slot.
+      const collisionEntry = this.programs.get(secondaryKey);
+      if (collisionEntry !== undefined) return collisionEntry;
+      // No resolved entry yet: compile under the secondary key.
+      return this.compileAndCache(vertexSource, fragmentSource, secondaryKey, secondaryKey);
     }
 
+    // 2. Primary slot empty: check collision-resolved slot.
+    //    This covers the case where the primary-keyed entry was removed/released
+    //    but the collision-resolved program (stored under secondaryKey) remains.
+    const collisionEntry = this.programs.get(secondaryKey);
+    if (collisionEntry !== undefined) return collisionEntry;
+
+    // 3. Full cache miss: compile under the primary hash key.
+    return this.compileAndCache(vertexSource, fragmentSource, hashKey, secondaryKey);
+  }
+
+  /**
+   * Compile a vertex/fragment shader pair, link them into a program, and
+   * store the result in the cache under `cacheKey`.
+   *
+   * @param secondaryKey The secondary hash to store in `programSources` for
+   *   collision detection.  Pass `undefined` for explicitly-keyed programs.
+   */
+  private compileAndCache(
+    vertexSource: string,
+    fragmentSource: string,
+    cacheKey: string,
+    secondaryKey: string | undefined,
+  ): WebGLProgram {
     const vertexShaderKey = vertexSource;
     const fragmentShaderKey = fragmentSource;
     const vsPreExisted = this.shaders.has(vertexShaderKey);
@@ -128,8 +199,8 @@ export class ShaderCache {
     }
     this.programs.set(cacheKey, program);
     this.programShaders.set(cacheKey, [vertexShaderKey, fragmentShaderKey]);
-    if (combinedSource !== undefined) {
-      this.programSources.set(cacheKey, combinedSource);
+    if (secondaryKey !== undefined) {
+      this.programSources.set(cacheKey, secondaryKey);
     }
     this.shaderRefCounts.set(vertexShaderKey, (this.shaderRefCounts.get(vertexShaderKey) ?? 0) + 1);
     this.shaderRefCounts.set(fragmentShaderKey, (this.shaderRefCounts.get(fragmentShaderKey) ?? 0) + 1);
@@ -156,19 +227,17 @@ export class ShaderCache {
    */
   getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
     if (key !== undefined) return key;
-    const combinedSource = `${vertexSource.length}:${vertexSource}\0${fragmentSource.length}:${fragmentSource}`;
-    const hashKey = ShaderCache.fnv1a(combinedSource);
-    // If a collision-resolved entry already exists under the full combined
-    // source key, return that key — even if the original hash slot is now
-    // vacant (e.g. the hash-keyed program was removed/released).
-    if (this.programs.has(combinedSource)) {
-      return combinedSource;
+    const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
+    const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
+    // If a collision-resolved entry already exists under the secondary key,
+    // return that key — even if the original primary-hash slot is now vacant.
+    if (this.programs.has(secondaryKey)) {
+      return secondaryKey;
     }
-    // Mirror the collision-resolution logic from getProgram: if the hash slot
-    // is already occupied by a *different* source pair, the actual key used is
-    // the full combined source string.
-    if (this.programs.has(hashKey) && this.programSources.get(hashKey) !== combinedSource) {
-      return combinedSource;
+    // Mirror the collision-resolution logic from getProgram: if the primary hash
+    // slot is occupied by a *different* source pair, the actual key is secondaryKey.
+    if (this.programs.has(hashKey) && this.programSources.get(hashKey) !== secondaryKey) {
+      return secondaryKey;
     }
     return hashKey;
   }

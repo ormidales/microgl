@@ -61,7 +61,10 @@ export class Time {
       (nowMs - this.last) / 1000,
       this.maxDeltaTimeSeconds,
     );
-    this.elapsed = (nowMs - this.origin - this.totalPausedMs) / 1000;
+    const currentPausedMs = this.pausedAt !== null
+      ? Math.max(0, nowMs - this.pausedAt)
+      : 0;
+    this.elapsed = (nowMs - this.origin - this.totalPausedMs - currentPausedMs) / 1000;
     this.last = nowMs;
   }
 

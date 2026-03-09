@@ -26,9 +26,18 @@ describe('Demo scene layout', () => {
 
   it('loads a glb model asynchronously and maps primitives to mesh entities', () => {
     expect(gltfDemoSource).toContain("const MODEL_URL = '/models/quad.glb'");
-    expect(gltfDemoSource).toContain('await fetch(MODEL_URL)');
+    expect(gltfDemoSource).toContain('await fetch(MODEL_URL, { signal })');
     expect(gltfDemoSource).toContain('await loadGltf(await response.arrayBuffer())');
     expect(gltfDemoSource).toContain('new MeshComponent(mesh.positions, mesh.indices, mesh.normals, mesh.uvs, mesh.min, mesh.max)');
+  });
+
+  it('guards loadModel against concurrent calls with AbortController', () => {
+    expect(gltfDemoSource).toContain('let loadController: AbortController | null = null');
+    expect(gltfDemoSource).toContain('loadController?.abort()');
+    expect(gltfDemoSource).toContain('loadController = new AbortController()');
+    expect(gltfDemoSource).toContain('const { signal } = loadController');
+    expect(gltfDemoSource).toContain('if (signal.aborted) return');
+    expect(gltfDemoSource).toContain("(error as Error).name === 'AbortError'");
   });
 
   it('provides shared theme styles for demo layout elements', () => {

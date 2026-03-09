@@ -89,7 +89,12 @@ export class Time {
     }
   }
 
-  /** Reset all counters. */
+  /**
+   * Reset all counters.
+   *
+   * Call this inside a WebGL `onContextRestored` handler to prevent a large
+   * `elapsed` drift caused by the gap between context loss and restoration.
+   */
   reset(): void {
     this.deltaTime = 0;
     this.elapsed = 0;

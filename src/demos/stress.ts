@@ -59,6 +59,7 @@ export function runStressDemo(): void {
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
+    time.reset();
     material.restore(gl);
     renderSystem.resetGpuResources();
     renderLoopActive = true;

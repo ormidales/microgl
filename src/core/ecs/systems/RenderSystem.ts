@@ -250,16 +250,8 @@ export class RenderSystem extends System {
 
   /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
   resetGpuResources(): void {
-    const gl = this.renderer?.gl;
-    if (gl) {
-      for (const buffers of this.meshBuffers.values()) {
-        if (buffers.ebo) gl.deleteBuffer(buffers.ebo);
-        if (buffers.uvVbo) gl.deleteBuffer(buffers.uvVbo);
-        if (buffers.normalVbo) gl.deleteBuffer(buffers.normalVbo);
-        gl.deleteBuffer(buffers.vbo);
-        gl.deleteVertexArray(buffers.vao);
-      }
-    }
+    // Do not call gl.delete* here — WebGL context loss already invalidates all GPU
+    // handles, so calling delete on them is undefined behaviour per the WebGL spec.
     this.meshBuffers = new Map();
   }
 }

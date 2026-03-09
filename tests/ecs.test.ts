@@ -982,6 +982,47 @@ describe('RenderSystem', () => {
 
     expect(onFailure).toHaveBeenCalledTimes(1);
   });
+
+  it('resetGpuResources does not call gl.delete* (context-loss safe)', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array([0, 1, 2])),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    // Simulate context loss: reset GPU resources without calling delete*
+    sys.resetGpuResources();
+
+    expect(gl.deleteBuffer).not.toHaveBeenCalled();
+    expect(gl.deleteVertexArray).not.toHaveBeenCalled();
+  });
+
+  it('resetGpuResources clears the buffer cache so it is rebuilt on next draw', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(
+      id,
+      new MeshComponent(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), new Uint16Array(0)),
+    );
+
+    const { gl, sys } = createRenderSystemWithMocks();
+    sys.update(em, 0.016);
+
+    // First draw allocated one VAO and one VBO
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(1);
+
+    sys.resetGpuResources();
+
+    // After reset the cache is empty, so the next draw must reallocate
+    sys.update(em, 0.016);
+    expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ---------------------------------------------------------------------------

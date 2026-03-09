@@ -194,15 +194,23 @@ async function resolveBuffers(
   const gltfBuffers = json.buffers ?? [];
   const resolved: ArrayBuffer[] = [];
 
+  let binChunkConsumed = false;
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
 
     if (buf.uri === undefined) {
-      // GLB embedded buffer (first buffer with no URI)
+      // GLB embedded buffer (only one buffer may omit a URI and consume the binary chunk)
       if (!binChunk) {
         throw new Error(`Buffer ${i} has no URI and no GLB binary chunk is available.`);
       }
+      if (binChunkConsumed) {
+        throw new Error(
+          `Buffer ${i} has no URI but the GLB binary chunk has already been consumed by a previous buffer. ` +
+          `GLB only supports one embedded binary buffer.`,
+        );
+      }
       resolved.push(binChunk);
+      binChunkConsumed = true;
     } else if (buf.uri.startsWith('data:')) {
       resolved.push(await decodeDataUri(buf.uri));
     } else {

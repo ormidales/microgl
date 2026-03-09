@@ -6,6 +6,7 @@ const mainSource = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf
 const gltfDemoSource = readFileSync(new URL('../src/demos/gltf.ts', import.meta.url), 'utf8');
 const cameraDemoSource = readFileSync(new URL('../src/demos/camera.ts', import.meta.url), 'utf8');
 const transformDemoSource = readFileSync(new URL('../src/demos/transform.ts', import.meta.url), 'utf8');
+const stressDemoSource = readFileSync(new URL('../src/demos/stress.ts', import.meta.url), 'utf8');
 const themeCss = readFileSync(new URL('../src/styles/theme.css', import.meta.url), 'utf8');
 const orbitalSystemSource = readFileSync(new URL('../src/core/ecs/systems/OrbitalCameraSystem.ts', import.meta.url), 'utf8');
 
@@ -86,5 +87,33 @@ describe('Demo scene layout', () => {
   it('transform demo calls cameraSystem.detach() on pagehide', () => {
     expect(transformDemoSource).toContain("window.addEventListener('pagehide'");
     expect(transformDemoSource).toContain('cameraSystem.detach()');
+  });
+
+  it('camera demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = cameraDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = cameraDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('stress demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = stressDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = stressDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('gltf demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = gltfDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = gltfDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
+  });
+
+  it('transform demo calls time.reset() in onContextRestored to prevent elapsed drift', () => {
+    const restoreIdx = transformDemoSource.indexOf('onContextRestored');
+    expect(restoreIdx).toBeGreaterThanOrEqual(0);
+    const restoreBlock = transformDemoSource.slice(restoreIdx);
+    expect(restoreBlock).toContain('time.reset()');
   });
 });

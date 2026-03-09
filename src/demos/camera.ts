@@ -50,6 +50,7 @@ export function runCameraDemo(): void {
     renderSystem.resetGpuResources();
   });
   renderer.onContextRestored((gl) => {
+    time.reset();
     material.restore(gl);
     renderSystem.resetGpuResources();
     renderLoopActive = true;

@@ -29,4 +29,11 @@ describe('Gallery page', () => {
     expect(galleryHtml).not.toMatch(/id="mesh-render-loop"[^]*?<a href="\/demo\.html"/);
     expect(galleryHtml).toContain('Demo coming soon');
   });
+
+  it('nav uses ul/li list structure with aria-label', () => {
+    expect(galleryHtml).toContain('<nav aria-label="Main">');
+    expect(galleryHtml).toContain('<ul>');
+    expect(galleryHtml).toContain('<li><a href="/index.html">Home</a></li>');
+    expect(galleryHtml).toContain('<li><a href="/demos.html">Demos</a></li>');
+  });
 });

@@ -70,7 +70,12 @@ export class RenderSystem extends System {
     indexCount: number;
     indexType: number;
   } | null {
-    if (this.renderer?.isContextLost) return null;
+    if (this.renderer?.isContextLost) {
+      if (this.meshBuffers.size > 0) {
+        this.meshBuffers.clear();
+      }
+      return null;
+    }
 
     const cached = this.meshBuffers.get(mesh);
     if (cached) return cached;

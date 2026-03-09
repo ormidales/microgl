@@ -734,7 +734,7 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
 
     const modelCall = material.setMat4.mock.calls.find(
-      (call: [string, Float32Array]) => call[0] === 'u_model',
+      (call) => call[0] === 'u_model',
     );
     expect(modelCall).toBeDefined();
 
@@ -1020,7 +1020,7 @@ describe('RenderSystem', () => {
 
     const onFailure = vi.fn();
     const { gl, sys } = createRenderSystemWithMocks(onFailure);
-    vi.mocked(gl.createVertexArray).mockReturnValue(null);
+    vi.mocked(gl.createVertexArray).mockReturnValue(null as unknown as WebGLVertexArrayObject);
 
     sys.update(em, 0.016);
     expect(onFailure).not.toHaveBeenCalled();
@@ -1042,10 +1042,10 @@ describe('RenderSystem', () => {
     const onFailure = vi.fn();
     const { gl, sys } = createRenderSystemWithMocks(onFailure);
     vi.mocked(gl.createVertexArray)
-      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject)
       .mockReturnValueOnce({} as WebGLVertexArrayObject)
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(null);
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject)
+      .mockReturnValueOnce(null as unknown as WebGLVertexArrayObject);
 
     sys.update(em, 0.016);
     sys.update(em, 0.016);

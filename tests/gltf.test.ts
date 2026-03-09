@@ -572,7 +572,7 @@ describe('loadGltf', () => {
       ok: true,
       status: 200,
       arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as Response);
+    } as unknown as Response);
 
     try {
       const buffer = jsonToBuffer(json);
@@ -649,7 +649,7 @@ describe('loadGltf', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
       status: 403,
-    } as Response);
+    } as unknown as Response);
 
     try {
       const buffer = jsonToBuffer(json);
@@ -672,7 +672,7 @@ describe('loadGltf', () => {
       ok: true,
       status: 200,
       arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as Response);
+    } as unknown as Response);
 
     try {
       const buffer = jsonToBuffer(json);
@@ -1449,7 +1449,7 @@ describe('loadGltf', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
       status: 403,
-    } as Response);
+    } as unknown as Response);
 
     try {
       const buffer = jsonToBuffer(json);

@@ -7,17 +7,19 @@ import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
   private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;
+  // Second independent seed for the verification hash.  Chosen as the next
+  // published 32-bit FNV offset basis candidate so the two hashes are
+  // statistically independent, giving ~64-bit effective collision resistance.
   private static readonly FNV1A_OFFSET_BASIS_2 = 0x84222325;
   private static readonly FNV1A_PRIME = 0x01000193;
 
   /**
-   * Compute a primary cache key for a vertex/fragment source pair without
-   * allocating the combined source string. Uses FNV-1a with a 4-byte
-   * length-encoded boundary marker to prevent 'ab'+'c' from hashing the same
-   * as 'a'+'bc'.
+   * Core FNV-1a hash accumulator over a vertex/fragment source pair.
+   * Encodes a 4-byte boundary marker (vertex source length) between the two
+   * strings so 'ab'+'c' and 'a'+'bc' always produce different hashes.
    */
-  private static hashSources(vertSrc: string, fragSrc: string): string {
-    let hash = ShaderCache.FNV1A_OFFSET_BASIS;
+  private static fnv1aSources(vertSrc: string, fragSrc: string, offsetBasis: number): string {
+    let hash = offsetBasis;
     const vLen = vertSrc.length;
     for (let i = 0; i < vLen; i++) {
       hash ^= vertSrc.charCodeAt(i);
@@ -36,7 +38,15 @@ export class ShaderCache {
       hash ^= fragSrc.charCodeAt(i);
       hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
     }
-    return `fnv1a-${(hash >>> 0).toString(16)}`;
+    return (hash >>> 0).toString(16);
+  }
+
+  /**
+   * Compute a primary cache key for a vertex/fragment source pair without
+   * allocating the combined source string.
+   */
+  private static hashSources(vertSrc: string, fragSrc: string): string {
+    return `fnv1a-${ShaderCache.fnv1aSources(vertSrc, fragSrc, ShaderCache.FNV1A_OFFSET_BASIS)}`;
   }
 
   /**
@@ -45,26 +55,7 @@ export class ShaderCache {
    * avoiding any allocation of the full combined source string.
    */
   private static hashSources2(vertSrc: string, fragSrc: string): string {
-    let hash = ShaderCache.FNV1A_OFFSET_BASIS_2;
-    const vLen = vertSrc.length;
-    for (let i = 0; i < vLen; i++) {
-      hash ^= vertSrc.charCodeAt(i);
-      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    }
-    hash ^= (vLen >>> 24) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= (vLen >>> 16) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= (vLen >>> 8) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= vLen & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    const fLen = fragSrc.length;
-    for (let i = 0; i < fLen; i++) {
-      hash ^= fragSrc.charCodeAt(i);
-      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    }
-    return `fnv1a2-${(hash >>> 0).toString(16)}`;
+    return `fnv1a2-${ShaderCache.fnv1aSources(vertSrc, fragSrc, ShaderCache.FNV1A_OFFSET_BASIS_2)}`;
   }
 
   /** key → compiled WebGLShader */

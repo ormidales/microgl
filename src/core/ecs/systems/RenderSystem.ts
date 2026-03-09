@@ -182,16 +182,17 @@ export class RenderSystem extends System {
     if (!this.renderer || !this.material) return;
 
     const gl = this.renderer.gl;
+    const material = this.material;
     const cameraEntity = em.getEntitiesWith('Camera')[0];
     const camera = cameraEntity !== undefined
       ? em.getComponent<CameraComponent>(cameraEntity, 'Camera')
       : undefined;
     const activeMeshes = new Set<MeshComponent>();
 
-    this.material.use();
-    this.material.setVec4('u_color', 1, 1, 1, 1);
-    this.material.setMat4('u_view', camera?.view ?? this.identity);
-    this.material.setMat4('u_projection', camera?.projection ?? this.identity);
+    material.use();
+    material.setVec4('u_color', 1, 1, 1, 1);
+    material.setMat4('u_view', camera?.view ?? this.identity);
+    material.setMat4('u_projection', camera?.projection ?? this.identity);
 
     em.forEachEntityWith(this.requiredComponents, (id) => {
       const transform = em.getComponent<TransformComponent>(id, 'Transform');
@@ -217,7 +218,7 @@ export class RenderSystem extends System {
         );
         transform.markModelMatrixClean();
       }
-      this.material.setMat4('u_model', transform.modelMatrix);
+      material.setMat4('u_model', transform.modelMatrix);
 
       const buffers = this.ensureMeshBuffers(gl, mesh);
       if (!buffers) return;

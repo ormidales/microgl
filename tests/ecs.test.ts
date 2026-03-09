@@ -439,8 +439,79 @@ describe('EntityManager', () => {
 });
 
 // ---------------------------------------------------------------------------
-// System.safeUpdate
+// forEachEntityWith
 // ---------------------------------------------------------------------------
+
+describe('EntityManager.forEachEntityWith', () => {
+  it('visits all matching entities and none of the non-matching ones', () => {
+    const em = new EntityManager();
+    const a = em.createEntity();
+    const b = em.createEntity();
+    const c = em.createEntity();
+
+    em.addComponent(a, new TransformComponent());
+    em.addComponent(a, new MeshComponent());
+    em.addComponent(b, new TransformComponent());
+    em.addComponent(c, new MeshComponent());
+
+    const visited: number[] = [];
+    em.forEachEntityWith(['Transform', 'Mesh'], (id) => visited.push(id));
+
+    expect(visited).toEqual([a]);
+  });
+
+  it('never invokes the callback when no entities match', () => {
+    const em = new EntityManager();
+    em.createEntity(); // no components
+
+    const visited: number[] = [];
+    em.forEachEntityWith(['Transform'], (id) => visited.push(id));
+
+    expect(visited).toHaveLength(0);
+  });
+
+  it('shares the cached view with getEntitiesWith for the same component set', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+    em.addComponent(id, new MeshComponent());
+
+    em.forEachEntityWith(['Transform', 'Mesh'], () => {});
+    em.getEntitiesWith('Transform', 'Mesh');
+
+    // Both calls should resolve to the same view key — only one entry in the cache
+    expect((em as any).views.size).toBe(1);
+  });
+
+  it('keeps the callback-visited set in sync after components change', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+
+    em.forEachEntityWith(['Transform'], () => {}); // populate cache
+
+    em.addComponent(id, new TransformComponent());
+    const first: number[] = [];
+    em.forEachEntityWith(['Transform'], (i) => first.push(i));
+    expect(first).toEqual([id]);
+
+    em.removeComponent(id, 'Transform');
+    const second: number[] = [];
+    em.forEachEntityWith(['Transform'], (i) => second.push(i));
+    expect(second).toHaveLength(0);
+  });
+
+  it('accepts a readonly string[] (e.g. from requiredComponents as const)', () => {
+    const em = new EntityManager();
+    const id = em.createEntity();
+    em.addComponent(id, new TransformComponent());
+
+    const types = ['Transform'] as const;
+    const visited: number[] = [];
+    em.forEachEntityWith(types, (i) => visited.push(i));
+
+    expect(visited).toEqual([id]);
+  });
+});
 
 describe('System.safeUpdate', () => {
   it('does not rethrow errors thrown by update()', () => {

@@ -183,10 +183,14 @@ export class RenderSystem extends System {
 
     const gl = this.renderer.gl;
     const material = this.material;
-    const cameraEntity = em.getEntitiesWith('Camera')[0];
-    const camera = cameraEntity !== undefined
-      ? em.getComponent<CameraComponent>(cameraEntity, 'Camera')
-      : undefined;
+    let camera: CameraComponent | undefined;
+    em.forEachEntityWith(['Camera'] as const, (id) => {
+      if (camera) return;
+      const component = em.getComponent<CameraComponent>(id, 'Camera');
+      if (component) {
+        camera = component;
+      }
+    });
     const activeMeshes = new Set<MeshComponent>();
 
     material.use();

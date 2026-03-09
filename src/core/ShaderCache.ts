@@ -117,9 +117,13 @@ export class ShaderCache {
 
     // Auto-keyed path: compute both hashes without allocating combinedSource.
     // hashSources  → primary cache key (used as the normal slot).
-    // hashSources2 → secondary key (collision verification + collision-resolved slot).
+    // hashSources2 → secondary key for collision verification.
+    // collisionKey → composite of both hashes; used as a globally-unique slot
+    //                for collision-resolved entries (simultaneous collision on
+    //                two independent 32-bit hashes is ~1 in 2^64).
     const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
     const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
+    const collisionKey = `${hashKey}:${secondaryKey}`;
 
     // 1. Check primary hash slot.
     const primaryEntry = this.programs.get(hashKey);
@@ -129,16 +133,18 @@ export class ShaderCache {
         return primaryEntry; // ✅ cache hit — no combinedSource allocation
       }
       // Primary hash collision: look up the collision-resolved slot.
-      const collisionEntry = this.programs.get(secondaryKey);
+      const collisionEntry = this.programs.get(collisionKey);
       if (collisionEntry !== undefined) return collisionEntry;
-      // No resolved entry yet: compile under the secondary key.
-      return this.compileAndCache(vertexSource, fragmentSource, secondaryKey, secondaryKey);
+      // No resolved entry yet: compile under the composite key.
+      // secondaryKey is undefined here: programSources only needs to be written
+      // for primary-slot entries (where it is checked for collision detection).
+      return this.compileAndCache(vertexSource, fragmentSource, collisionKey, undefined);
     }
 
     // 2. Primary slot empty: check collision-resolved slot.
     //    This covers the case where the primary-keyed entry was removed/released
-    //    but the collision-resolved program (stored under secondaryKey) remains.
-    const collisionEntry = this.programs.get(secondaryKey);
+    //    but the collision-resolved program (stored under collisionKey) remains.
+    const collisionEntry = this.programs.get(collisionKey);
     if (collisionEntry !== undefined) return collisionEntry;
 
     // 3. Full cache miss: compile under the primary hash key.
@@ -150,7 +156,8 @@ export class ShaderCache {
    * store the result in the cache under `cacheKey`.
    *
    * @param secondaryKey The secondary hash to store in `programSources` for
-   *   collision detection.  Pass `undefined` for explicitly-keyed programs.
+   *   collision detection.  Pass `undefined` for explicitly-keyed programs and
+   *   for collision-resolved programs (stored under the composite collision key).
    */
   private compileAndCache(
     vertexSource: string,
@@ -220,15 +227,16 @@ export class ShaderCache {
     if (key !== undefined) return key;
     const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
     const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
-    // If a collision-resolved entry already exists under the secondary key,
+    const collisionKey = `${hashKey}:${secondaryKey}`;
+    // If a collision-resolved entry already exists under the composite key,
     // return that key — even if the original primary-hash slot is now vacant.
-    if (this.programs.has(secondaryKey)) {
-      return secondaryKey;
+    if (this.programs.has(collisionKey)) {
+      return collisionKey;
     }
     // Mirror the collision-resolution logic from getProgram: if the primary hash
-    // slot is occupied by a *different* source pair, the actual key is secondaryKey.
+    // slot is occupied by a *different* source pair, the actual key is collisionKey.
     if (this.programs.has(hashKey) && this.programSources.get(hashKey) !== secondaryKey) {
-      return secondaryKey;
+      return collisionKey;
     }
     return hashKey;
   }

@@ -371,10 +371,10 @@ describe('ShaderCache', () => {
     );
 
     cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
-    // Second pair collides; must be stored under its secondary-hash key.
+    // Second pair collides; must be stored under the composite collision key.
     cache.getProgram('vert-b', 'frag-b');
 
-    // getProgramKey must return the collision-free key for the second pair.
+    // getProgramKey must return the composite collision key for the second pair.
     const keyB = cache.getProgramKey('vert-b', 'frag-b');
     cache.retainProgram(keyB);
     cache.releaseProgram(keyB);
@@ -389,7 +389,7 @@ describe('ShaderCache', () => {
 
   it('collision-resolved entry survives after the hash-keyed program is removed', () => {
     // Regression test: removing the original hash-keyed program must not orphan
-    // the collision-resolved program (stored under the secondary hash key).  Both
+    // the collision-resolved program (stored under the composite collision key).  Both
     // getProgramKey and getProgram must continue to point at the surviving entry.
     let programId = 0;
     (gl.createProgram as ReturnType<typeof vi.fn>).mockImplementation(
@@ -401,13 +401,13 @@ describe('ShaderCache', () => {
     );
 
     cache.getProgram('vert-a', 'frag-a'); // stored under 'collision-key'
-    const p2 = cache.getProgram('vert-b', 'frag-b'); // collision → stored under secondary hash key
+    const p2 = cache.getProgram('vert-b', 'frag-b'); // collision → stored under composite collision key
 
     // Remove the hash-keyed program so the hash slot is now vacant.
     cache.removeProgram('collision-key');
     expect(gl.deleteProgram).toHaveBeenCalledTimes(1);
 
-    // getProgramKey must still return the secondary-hash key for the second pair.
+    // getProgramKey must still return the composite collision key for the second pair.
     const keyB = cache.getProgramKey('vert-b', 'frag-b');
     expect(typeof keyB).toBe('string');
     // The key must reference the surviving entry — getProgram must not recompile.

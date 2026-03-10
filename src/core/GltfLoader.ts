@@ -37,7 +37,16 @@ const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
 export interface GltfLoaderOptions {
+  /**
+   * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
+   * Receives the raw URI string and must return the corresponding binary data.
+   * Required when loading plain `.gltf` files that reference external `.bin` files.
+   */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
+  /**
+   * Maximum accepted byte size for a plain JSON glTF payload.
+   * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
+   */
   maxJsonBufferBytes?: number;
   /** When true, each VEC3 normal is normalized to unit length after loading. */
   normalizeNormals?: boolean;

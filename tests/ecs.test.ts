@@ -1022,6 +1022,15 @@ describe('RenderSystem', () => {
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
   });
 
+  it('flushStaleMeshBuffers JSDoc includes an @example block for the paused-loop use-case', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // @example block must appear before the method signature
+    expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
+  });
+
   it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();

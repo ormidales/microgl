@@ -48,11 +48,18 @@ export interface GltfLoaderOptions {
    * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
    */
   maxJsonBufferBytes?: number;
-  /** When true, each VEC3 normal is normalized to unit length after loading. */
+  /**
+   * When `true`, each VEC3 normal vector is re-normalized to unit length after
+   * loading. Useful when the source asset was exported with non-unit normals.
+   * Adds an O(n) pass over the normal buffer; leave `false` (default) when the
+   * asset is known-clean to avoid the overhead.
+   */
   normalizeNormals?: boolean;
   /**
-   * When true, a non-unit quaternion encountered during node matrix construction
-   * throws an `Error` instead of logging a warning and normalizing automatically.
+   * When `true`, a non-unit quaternion found in a node's `rotation` field causes
+   * `loadGltf` to throw an `Error` rather than silently normalizing it.
+   * Enable in development / CI to catch malformed assets early; leave `false`
+   * (default) in production to be lenient with third-party exporters.
    */
   strict?: boolean;
 }

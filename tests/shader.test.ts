@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createShader, createProgram } from '../src/core/ShaderUtils';
 import { ShaderCache } from '../src/core/ShaderCache';
@@ -6,6 +7,8 @@ import {
   DEFAULT_VERTEX_SOURCE,
   DEFAULT_FRAGMENT_SOURCE,
 } from '../src/core/Material';
+
+const materialSource = readFileSync(new URL('../src/core/Material.ts', import.meta.url), 'utf8');
 
 // ---------------------------------------------------------------------------
 // WebGL 2 mock helpers
@@ -855,6 +858,27 @@ describe('Default shader sources', () => {
     expect(typeof DEFAULT_VERTEX_SOURCE).toBe('string');
     expect(DEFAULT_VERTEX_SOURCE.length).toBeGreaterThan(0);
     expect(DEFAULT_VERTEX_SOURCE).toContain('#version 300 es');
+  });
+
+  it('DEFAULT_VERTEX_SOURCE JSDoc documents a_normal at location 1', () => {
+    const normalIdx = materialSource.indexOf('`a_normal`');
+    expect(normalIdx).toBeGreaterThan(-1);
+    const loc1Idx = materialSource.indexOf('location 1', normalIdx);
+    expect(loc1Idx).toBeGreaterThan(normalIdx);
+  });
+
+  it('DEFAULT_VERTEX_SOURCE JSDoc documents a_uv at location 2', () => {
+    const uvIdx = materialSource.indexOf('`a_uv`');
+    expect(uvIdx).toBeGreaterThan(-1);
+    const loc2Idx = materialSource.indexOf('location 2', uvIdx);
+    expect(loc2Idx).toBeGreaterThan(uvIdx);
+  });
+
+  it('DEFAULT_VERTEX_SOURCE JSDoc marks a_normal and a_uv as optional', () => {
+    const normalIdx = materialSource.indexOf('`a_normal`');
+    const uvIdx = materialSource.indexOf('`a_uv`');
+    expect(materialSource.indexOf('optional', normalIdx)).toBeGreaterThan(normalIdx);
+    expect(materialSource.indexOf('optional', uvIdx)).toBeGreaterThan(uvIdx);
   });
 
   it('DEFAULT_FRAGMENT_SOURCE is a non-empty string', () => {

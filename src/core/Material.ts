@@ -17,7 +17,9 @@ import type { mat4 } from 'gl-matrix';
  * Default GLSL ES 3.00 vertex shader used by {@link Material}.
  *
  * **Attributes**
- * - `a_position` (`vec4`, location 0) – clip-space position of each vertex.
+ * - `a_position` (`vec3`, location 0) – object-space position of each vertex.
+ * - `a_normal`   (`vec3`, location 1) – vertex normal in object space (optional; bound only when the `MeshComponent` provides normal data).
+ * - `a_uv`       (`vec2`, location 2) – texture coordinate set 0 (optional; bound only when the `MeshComponent` provides UV data).
  *
  * **Uniforms**
  * - `u_model` (`mat4`) – model (world) transform matrix.

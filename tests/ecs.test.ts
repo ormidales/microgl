@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
 import { System } from '../src/core/ecs/System';
@@ -622,6 +623,15 @@ describe('TransformComponent', () => {
     t.markModelMatrixClean();
     expect(t.needsModelMatrixUpdate()).toBe(false);
   });
+
+  it('setDirty JSDoc includes an @example block covering the bulk-assignment use-case', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/components/TransformComponent.ts', import.meta.url),
+      'utf8',
+    );
+    // Verify @example appears inside the setDirty JSDoc block (i.e. before the method signature)
+    expect(source).toMatch(/@example[\s\S]*?setDirty\(\)/);
+  });
 });
 
 describe('MeshComponent', () => {
@@ -1010,6 +1020,15 @@ describe('RenderSystem', () => {
     // only the destroyed entity's buffers should be freed
     expect(gl.deleteVertexArray).toHaveBeenCalledTimes(1);
     expect(gl.deleteBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushStaleMeshBuffers JSDoc includes an @example block for the paused-loop use-case', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // @example block must appear before the method signature
+    expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
   });
 
   it('calls allocation failure handler once when failures are consecutive', () => {
@@ -1652,5 +1671,24 @@ describe('OrbitalCameraSystem', () => {
       touchendHandler,
       { passive: true },
     );
+  });
+
+  it('detach is a no-op when attach was never called', () => {
+    const sys = new OrbitalCameraSystem();
+    expect(() => sys.detach()).not.toThrow();
+  });
+
+  it('detach is a no-op when called a second time after detach', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+    (globalThis as any).window.addEventListener = vi.fn();
+    (globalThis as any).window.removeEventListener = vi.fn();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+    expect(() => sys.detach()).not.toThrow();
   });
 });

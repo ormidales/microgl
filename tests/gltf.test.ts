@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   loadGltf,
   parseContainer,
@@ -10,6 +11,8 @@ import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset, GltfComponentType } from '../src/core/GltfTypes';
 import { GL_FLOAT, GL_UNSIGNED_SHORT, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT, GL_SHORT } from '../src/core/GltfTypes';
 import { MeshComponent } from '../src/core/ecs/components/MeshComponent';
+
+const gltfLoaderSource = readFileSync(new URL('../src/core/GltfLoader.ts', import.meta.url), 'utf8');
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1659,5 +1662,28 @@ describe('buildNodeLocalMatrix', () => {
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(result.nodes[0].localMatrix).toEqual(IDENTITY);
     warnSpy.mockRestore();
+  });
+});
+
+describe('GltfLoaderOptions JSDoc', () => {
+  it('normalizeNormals JSDoc mentions O(n) cost', () => {
+    expect(gltfLoaderSource).toContain('O(n)');
+  });
+
+  it('normalizeNormals JSDoc documents the false default value', () => {
+    expect(gltfLoaderSource).toContain('(default)');
+    expect(gltfLoaderSource).toContain('`false`');
+  });
+
+  it('strict JSDoc explains error-vs-warning behaviour', () => {
+    expect(gltfLoaderSource).toContain('throw an `Error`');
+  });
+
+  it('strict JSDoc recommends enabling in CI', () => {
+    expect(gltfLoaderSource).toContain('CI');
+  });
+
+  it('strict JSDoc documents the false default value', () => {
+    expect(gltfLoaderSource).toContain('(default) in production');
   });
 });

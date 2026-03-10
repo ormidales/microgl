@@ -65,6 +65,12 @@ export class TransformComponent implements Component {
    * field values have changed.  Use this after recycling a component instance
    * or after mutating properties through paths that bypass the normal change-
    * detection mechanism (e.g. bulk-assignment from an external script).
+   *
+   * @example
+   * // Bulk-update position from an animation clip without triggering
+   * // per-property change detection:
+   * Object.assign(transform, clip.getFrame(t));
+   * transform.setDirty();
    */
   setDirty(): void {
     this.dirty = true;

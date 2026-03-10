@@ -125,22 +125,35 @@ export interface GltfImage {
 }
 
 
+/** A glTF 2.0 accessor describing how to interpret a slice of a buffer view (§3.6.2). */
 export interface GltfAccessor {
+  /** Index into `bufferViews`. Undefined for zero-initialized accessors. */
   bufferView?: number;
+  /** Byte offset relative to the start of the buffer view. Defaults to 0. */
   byteOffset?: number;
+  /** WebGL component type constant (e.g. `GL_FLOAT`, `GL_UNSIGNED_SHORT`). */
   componentType: GltfComponentType;
+  /** Number of elements (not bytes) in the accessor. */
   count: number;
+  /** Element type string: `"SCALAR"`, `"VEC2"`, `"VEC3"`, `"VEC4"`, `"MAT*"`. */
   type: string;
+  /** Sparse accessor overrides (not yet supported by this loader). */
   sparse?: unknown;
   max?: number[];
   min?: number[];
 }
 
+/** A glTF 2.0 buffer view — a contiguous slice of a binary buffer (§3.6.3). */
 export interface GltfBufferView {
+  /** Index into the top-level `buffers` array. */
   buffer: number;
+  /** Byte offset from the start of the buffer. Defaults to 0. */
   byteOffset?: number;
+  /** Length of the buffer view in bytes. */
   byteLength: number;
+  /** Stride in bytes between interleaved vertex attributes. When undefined, data is tightly packed. */
   byteStride?: number;
+  /** WebGL buffer binding target hint (`ARRAY_BUFFER` or `ELEMENT_ARRAY_BUFFER`). */
   target?: number;
 }
 

@@ -17,6 +17,12 @@ export class ShaderCache {
    * Core FNV-1a hash accumulator over a vertex/fragment source pair.
    * Encodes a 4-byte boundary marker (vertex source length) between the two
    * strings so 'ab'+'c' and 'a'+'bc' always produce different hashes.
+   *
+   * @param vertSrc     GLSL vertex shader source string.
+   * @param fragSrc     GLSL fragment shader source string.
+   * @param offsetBasis FNV-1a 32-bit offset basis seed. Use distinct seeds for
+   *                    primary and secondary hashes to achieve ~64-bit collision resistance.
+   * @returns Hex string of the unsigned 32-bit FNV-1a hash.
    */
   private static fnv1aSources(vertSrc: string, fragSrc: string, offsetBasis: number): string {
     let hash = offsetBasis;

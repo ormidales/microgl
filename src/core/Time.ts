@@ -90,10 +90,10 @@ export class Time {
   }
 
   /**
-   * Reset all counters.
+   * Reset all internal counters to their initial state.
    *
-   * Call this inside a WebGL `onContextRestored` handler to prevent a large
-   * `elapsed` drift caused by the gap between context loss and restoration.
+   * Useful after a WebGL context restoration to restart the elapsed clock
+   * without creating a new `Time` instance.
    */
   reset(): void {
     this.deltaTime = 0;

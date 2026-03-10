@@ -1,6 +1,6 @@
 {
   "name": "microgl",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "type": "module",
   "description": "Moteur de rendu 3D WebGL 2.0 minimaliste basé sur une architecture ECS, avec support glTF 2.0 et TypeScript strict.",
   "scripts": {

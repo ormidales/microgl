@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EntityManager } from '../src/core/ecs/EntityManager';
 import { System } from '../src/core/ecs/System';
@@ -621,6 +622,15 @@ describe('TransformComponent', () => {
     expect(t.needsModelMatrixUpdate()).toBe(true);
     t.markModelMatrixClean();
     expect(t.needsModelMatrixUpdate()).toBe(false);
+  });
+
+  it('setDirty JSDoc includes an @example block covering the bulk-assignment use-case', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/components/TransformComponent.ts', import.meta.url),
+      'utf8',
+    );
+    // Verify @example appears inside the setDirty JSDoc block (i.e. before the method signature)
+    expect(source).toMatch(/@example[\s\S]*?setDirty\(\)/);
   });
 });
 

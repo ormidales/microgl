@@ -1653,4 +1653,23 @@ describe('OrbitalCameraSystem', () => {
       { passive: true },
     );
   });
+
+  it('detach is a no-op when attach was never called', () => {
+    const sys = new OrbitalCameraSystem();
+    expect(() => sys.detach()).not.toThrow();
+  });
+
+  it('detach is a no-op when called a second time after detach', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+    (globalThis as any).window.addEventListener = vi.fn();
+    (globalThis as any).window.removeEventListener = vi.fn();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(canvas);
+    sys.detach();
+    expect(() => sys.detach()).not.toThrow();
+  });
 });

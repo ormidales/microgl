@@ -116,7 +116,11 @@ export class OrbitalCameraSystem extends System {
     canvas.addEventListener('wheel', this.onWheel, OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS);
   }
 
-  /** Remove previously registered event listeners. */
+  /**
+   * Remove all event listeners registered by {@link attach} and release the
+   * canvas reference.  Safe to call even when {@link attach} was never invoked
+   * or after a previous {@link detach} call (no-op in both cases).
+   */
   detach(): void {
     if (!this.canvas) return;
     this.canvas.removeEventListener('mousedown', this.onMouseDown);

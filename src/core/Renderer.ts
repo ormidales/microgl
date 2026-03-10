@@ -55,7 +55,14 @@ export class Renderer {
     }
   }
 
-  /** Clear the framebuffer with the given RGBA color. */
+  /**
+   * Clear the framebuffer with the given RGBA color and reset the depth buffer.
+   *
+   * @param r Red channel in `[0, 1]`.
+   * @param g Green channel in `[0, 1]`.
+   * @param b Blue channel in `[0, 1]`.
+   * @param a Alpha channel in `[0, 1]`. Defaults to `1.0` (fully opaque).
+   */
   clear(r: number, g: number, b: number, a: number = 1.0): void {
     this.gl.clearColor(r, g, b, a);
     this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);

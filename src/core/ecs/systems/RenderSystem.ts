@@ -7,6 +7,12 @@ import type { TransformComponent } from '../components/TransformComponent';
 import type { MeshComponent } from '../components/MeshComponent';
 import type { CameraComponent } from '../components/CameraComponent';
 
+/**
+ * Number of consecutive GPU mesh-buffer allocation failures that must occur
+ * before RenderSystem logs a degraded-rendering warning.
+ * A threshold of 2 avoids false positives caused by a single transient
+ * WebGL context interruption while still catching persistent GPU memory pressure.
+ */
 const CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD = 2;
 
 /**

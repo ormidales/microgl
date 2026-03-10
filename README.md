@@ -1,5 +1,5 @@
 ## Concept
-Développement d'un moteur de rendu 3D WebGL 2.0 minimaliste et performant, structuré autour d'une architecture Entity-Component-System (ECS). L'objectif est de fournir une alternative légère aux frameworks majeurs pour le prototypage rapide et les jeux web à faible consommation de ressources.
+Development of a minimalist and high-performance WebGL 2.0 3D rendering engine, structured around an Entity-Component-System (ECS) architecture. The goal is to provide a lightweight alternative to major frameworks for rapid prototyping and low-resource web games.
 
 ## Stack Technique
 

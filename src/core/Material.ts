@@ -103,6 +103,11 @@ void main() {
 // ---------------------------------------------------------------------------
 
 export class Material {
+  /**
+   * The linked `WebGLProgram` for this material, or `null` when the program
+   * could not be created or after a failed {@link restore} call following
+   * WebGL context loss. Check for `null` before passing to raw WebGL calls.
+   */
   public program: WebGLProgram | null;
 
   private gl: WebGL2RenderingContext;

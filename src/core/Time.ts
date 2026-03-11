@@ -92,8 +92,17 @@ export class Time {
   /**
    * Reset all internal counters to their initial state.
    *
-   * Useful after a WebGL context restoration to restart the elapsed clock
-   * without creating a new `Time` instance.
+   * After calling `reset()`, the next {@link update} call will treat the
+   * supplied timestamp as the new origin, so `deltaTime` is 0 and `elapsed`
+   * restarts from 0. This prevents a large `deltaTime` spike caused by the
+   * time elapsed during a pause or WebGL context loss.
+   *
+   * @example
+   * renderer.onContextRestored((gl) => {
+   *   time.reset(); // avoid a large deltaTime on the first restored frame
+   *   material.restore(gl);
+   *   requestAnimationFrame(loop);
+   * });
    */
   reset(): void {
     this.deltaTime = 0;

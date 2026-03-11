@@ -96,9 +96,9 @@ export class OrbitalCameraSystem extends System {
    *
    * **Important:** always call {@link detach} when the owning scene is torn
    * down (e.g. in a `pagehide` handler or equivalent cleanup path).  Failing
-   * to do so leaves `mouseup` and `touchend` listeners registered on `window`
-   * indefinitely, which leaks memory and produces ghost input events on every
-   * subsequent scene reload.
+   * to do so leaves `mouseup` and `touchend` listeners registered on `window`,
+   * and a non-passive `wheel` listener on the canvas, registered indefinitely.
+   * This leaks memory and produces ghost input events on subsequent scene reloads.
    */
   attach(canvas: HTMLCanvasElement): void {
     this.detach();

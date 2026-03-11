@@ -107,6 +107,47 @@ describe('Time', () => {
     expect(time.pause.length).toBe(1);
     expect(time.resume.length).toBe(1);
   });
+
+  it('resets deltaTime and elapsed to 0 and treats next update as new origin', () => {
+    const time = new Time();
+    time.update(1000);
+    time.update(2000); // deltaTime = 1 s, elapsed = 1 s
+
+    time.reset();
+
+    expect(time.deltaTime).toBe(0);
+    expect(time.elapsed).toBe(0);
+
+    // Next update should start fresh from the supplied timestamp
+    time.update(5000);
+    expect(time.deltaTime).toBe(0);
+    expect(time.elapsed).toBe(0);
+
+    time.update(5016);
+    expect(time.deltaTime).toBeCloseTo(0.016, 5);
+    expect(time.elapsed).toBeCloseTo(0.016, 5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Time – reset() JSDoc
+// ---------------------------------------------------------------------------
+
+describe('Time reset() JSDoc', () => {
+  const { readFileSync } = require('node:fs');
+  const timeSource: string = readFileSync(new URL('../src/core/Time.ts', import.meta.url), 'utf8');
+
+  it('documents post-call guarantees for deltaTime and elapsed', () => {
+    expect(timeSource).toContain('deltaTime` is 0');
+    expect(timeSource).toContain('`elapsed`');
+    expect(timeSource).toContain('{@link update}');
+  });
+
+  it('includes an @example block with the context-restore use case', () => {
+    expect(timeSource).toContain('@example');
+    expect(timeSource).toContain('time.reset()');
+    expect(timeSource).toContain('requestAnimationFrame');
+  });
 });
 
 // ---------------------------------------------------------------------------

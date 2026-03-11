@@ -228,6 +228,9 @@ export class ShaderCache {
    * @param vertexSource GLSL vertex shader source
    * @param fragmentSource GLSL fragment shader source
    * @param key Explicit cache key, if one was supplied to `getProgram`.
+   * @returns The string cache key used (or that would be used) by `getProgram`
+   *   for this source pair. For auto-keyed programs this is the primary FNV-1a
+   *   hash string; for explicitly-keyed programs it is the supplied `key` value.
    */
   getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
     if (key !== undefined) return key;

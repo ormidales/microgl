@@ -15,11 +15,13 @@ describe('core root index exports', () => {
     expect(em.hasComponent(id, 'Mesh')).toBe(true);
   });
 
-  it('annotates DEFAULT_VERTEX_SOURCE barrel export with a @see JSDoc comment', () => {
-    expect(coreIndexSource).toContain('@see {@link DEFAULT_VERTEX_SOURCE}');
+  it('annotates DEFAULT_VERTEX_SOURCE barrel export with a JSDoc comment linking Material', () => {
+    expect(coreIndexSource).toMatch(/see \{@link Material\}[^]*?export \{ DEFAULT_VERTEX_SOURCE \}/);
+    expect(coreIndexSource).not.toContain('in Material.ts');
   });
 
-  it('annotates DEFAULT_FRAGMENT_SOURCE barrel export with a @see JSDoc comment', () => {
-    expect(coreIndexSource).toContain('@see {@link DEFAULT_FRAGMENT_SOURCE}');
+  it('annotates DEFAULT_FRAGMENT_SOURCE barrel export with a JSDoc comment linking Material', () => {
+    expect(coreIndexSource).toMatch(/see \{@link Material\}[^]*?export \{ DEFAULT_FRAGMENT_SOURCE \}/);
+    expect(coreIndexSource).not.toContain('in Material.ts');
   });
 });

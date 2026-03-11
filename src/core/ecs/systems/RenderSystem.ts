@@ -251,14 +251,18 @@ export class RenderSystem extends System {
    * Releases GPU buffers for mesh components that are no longer attached to any
    * active entity. Call this outside the `update` loop to reclaim GPU memory
    * immediately after destroying mesh entities when the animation loop is paused.
-   * When the loop is running, `update()` performs the same cleanup automatically
-   * at the end of every frame.
+   * When the loop is running, `update()` (or `safeUpdate()`) performs the same
+   * cleanup automatically at the end of every frame.
    *
    * @example
    * // Destroy a batch of entities and immediately free their GPU buffers
    * // while the render loop is suspended:
    * ids.forEach(id => em.destroyEntity(id));
    * renderSystem.flushStaleMeshBuffers(em);
+   *
+   * // When the loop is active, no explicit flush is needed:
+   * ids.forEach(id => em.destroyEntity(id));
+   * // cleanup happens automatically inside renderSystem.safeUpdate(em, dt)
    */
   flushStaleMeshBuffers(em: EntityManager): void {
     const gl = this.renderer?.gl;

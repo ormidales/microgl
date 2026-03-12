@@ -17,3 +17,17 @@ describe('Material.program JSDoc', () => {
     expect(materialSource).toContain('{@link restore}');
   });
 });
+
+describe('Material shader source JSDoc security warnings', () => {
+  it('DEFAULT_VERTEX_SOURCE JSDoc includes a @security tag warning about GLSL injection', () => {
+    expect(materialSource).toMatch(/\/\*\*[^]*?@security[^]*?GPU hangs[^]*?\*\/\s*(?:export\s+)?const\s+DEFAULT_VERTEX_SOURCE\s*=/);
+  });
+
+  it('DEFAULT_FRAGMENT_SOURCE JSDoc includes a @security tag warning about GLSL injection', () => {
+    expect(materialSource).toMatch(/\/\*\*[^]*?@security[^]*?GPU hangs[^]*?\*\/\s*(?:export\s+)?const\s+DEFAULT_FRAGMENT_SOURCE\s*=/);
+  });
+
+  it('Material constructor JSDoc includes a @security tag', () => {
+    expect(materialSource).toMatch(/\/\*\*[^]*?@security[^]*?GPU hangs[^]*?\*\/\s*constructor\s*\(/);
+  });
+});

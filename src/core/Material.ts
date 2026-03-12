@@ -45,6 +45,11 @@ import type { mat4 } from 'gl-matrix';
  *
  * const material = new Material(gl, myVertexShader, DEFAULT_FRAGMENT_SOURCE);
  * ```
+ *
+ * @security Never pass user-controlled strings as GLSL source to the
+ * {@link Material} constructor. GLSL is compiled on the GPU; untrusted input
+ * can cause GPU hangs (DoS) or unintended rendering behaviour.
+ * Always use static, author-controlled shader strings.
  */
 export const DEFAULT_VERTEX_SOURCE = `#version 300 es
 layout(location = 0) in vec4 a_position;
@@ -85,6 +90,11 @@ void main() {
  *
  * const material = new Material(gl, DEFAULT_VERTEX_SOURCE, myFragmentShader);
  * ```
+ *
+ * @security Never pass user-controlled strings as GLSL source to the
+ * {@link Material} constructor. GLSL is compiled on the GPU; untrusted input
+ * can cause GPU hangs (DoS) or unintended rendering behaviour.
+ * Always use static, author-controlled shader strings.
  */
 export const DEFAULT_FRAGMENT_SOURCE = `#version 300 es
 precision mediump float;
@@ -121,6 +131,11 @@ export class Material {
    * @param gl WebGL 2 context
    * @param vertexSource GLSL vertex shader source (defaults to a basic MVP shader)
    * @param fragmentSource GLSL fragment shader source (defaults to a solid-color shader)
+   * @security Never pass user-controlled strings as GLSL source. GLSL is
+   * compiled on the GPU; untrusted input can cause GPU hangs (DoS) or
+   * unintended rendering behaviour. Always use static, author-controlled
+   * shader strings. See {@link DEFAULT_VERTEX_SOURCE} and
+   * {@link DEFAULT_FRAGMENT_SOURCE} for details.
    */
   constructor(
     gl: WebGL2RenderingContext,

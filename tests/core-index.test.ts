@@ -24,4 +24,12 @@ describe('core root index exports', () => {
     expect(coreIndexSource).toMatch(/see \{@link Material\}[^]*?export \{ DEFAULT_FRAGMENT_SOURCE \}/);
     expect(coreIndexSource).not.toContain('in Material.ts');
   });
+
+  it('DEFAULT_VERTEX_SOURCE barrel export comment includes a @security note', () => {
+    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_VERTEX_SOURCE \}/);
+  });
+
+  it('DEFAULT_FRAGMENT_SOURCE barrel export comment includes a @security note', () => {
+    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_FRAGMENT_SOURCE \}/);
+  });
 });

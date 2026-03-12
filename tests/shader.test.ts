@@ -634,6 +634,78 @@ describe('ShaderCache', () => {
 
     vi.restoreAllMocks();
   });
+
+  // -------------------------------------------------------------------------
+  // FNV-1a hash correctness
+  // -------------------------------------------------------------------------
+
+  describe('FNV-1a hash (fnv1aSources)', () => {
+    // Access private static methods via type cast for white-box testing.
+    const hashSources = (v: string, f: string): string =>
+      (ShaderCache as unknown as { hashSources: (v: string, f: string) => string }).hashSources(v, f);
+    const hashSources2 = (v: string, f: string): string =>
+      (ShaderCache as unknown as { hashSources2: (v: string, f: string) => string }).hashSources2(v, f);
+
+    it('returns a valid lowercase hex string prefixed with fnv1a-', () => {
+      const key = hashSources('vert', 'frag');
+      expect(key).toMatch(/^fnv1a-[0-9a-f]+$/);
+    });
+
+    it('returns a valid lowercase hex string prefixed with fnv1a2- for secondary hash', () => {
+      const key = hashSources2('vert', 'frag');
+      expect(key).toMatch(/^fnv1a2-[0-9a-f]+$/);
+    });
+
+    it('is deterministic — same inputs always produce the same key', () => {
+      expect(hashSources('hello', 'world')).toBe(hashSources('hello', 'world'));
+      expect(hashSources2('hello', 'world')).toBe(hashSources2('hello', 'world'));
+    });
+
+    it('primary and secondary hashes differ for the same inputs (independent seeds)', () => {
+      const primary = hashSources('hello', 'world');
+      const secondary = hashSources2('hello', 'world');
+      expect(primary).not.toBe(secondary);
+    });
+
+    it('produces different keys for different source pairs', () => {
+      expect(hashSources('a', 'b')).not.toBe(hashSources('c', 'd'));
+    });
+
+    it('treats "ab"+"c" differently from "a"+"bc" (length-separator prevents aliasing)', () => {
+      expect(hashSources('ab', 'c')).not.toBe(hashSources('a', 'bc'));
+    });
+
+    it('handles source strings containing charCodes > 0x7F without producing NaN or undefined', () => {
+      // 'é' = 0xe9, '你' = 0x4f60 — both exceed the ASCII range.
+      const key1 = hashSources('caf\u00e9', 'frag');
+      const key2 = hashSources2('caf\u00e9', '\u4f60\u597d');
+      expect(key1).toMatch(/^fnv1a-[0-9a-f]+$/);
+      expect(key2).toMatch(/^fnv1a2-[0-9a-f]+$/);
+    });
+
+    it('high-charCode inputs are deterministic', () => {
+      const a = hashSources('caf\u00e9', '\u4f60\u597d');
+      const b = hashSources('caf\u00e9', '\u4f60\u597d');
+      expect(a).toBe(b);
+    });
+
+    it('spot-check: hashSources("hello","world") matches reference FNV-1a value', () => {
+      // Reference value independently verified using the same algorithm inline:
+      //   seed = 0x811c9dc5 (FNV1A_OFFSET_BASIS); prime = 0x01000193
+      //   Each step: hash = ((hash ^ charCode) >>> 0); hash = (Math.imul(hash, prime) >>> 0)
+      //   Length bytes (big-endian) of "hello" (5) are mixed in between the two strings.
+      //   Final result (no trailing >>> 0 needed — hash is already uint32): '832f0b0'
+      expect(hashSources('hello', 'world')).toBe('fnv1a-832f0b0');
+    });
+
+    it('spot-check: hashSources2("hello","world") matches reference FNV-1a value', () => {
+      // Reference value independently verified using the same algorithm inline:
+      //   seed = 0x84222325 (FNV1A_OFFSET_BASIS_2); prime = 0x01000193
+      //   Same per-step >>> 0 masking as hashSources, different starting seed.
+      //   Final result: '794f9810'
+      expect(hashSources2('hello', 'world')).toBe('fnv1a2-794f9810');
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

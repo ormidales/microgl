@@ -226,6 +226,90 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).toThrow(/does not contain a JSON chunk/);
   });
 
+  // --- prototype-pollution protection ---
+
+  it('rejects __proto__ key in plain JSON glTF', () => {
+    const text = '{"__proto__":{"isAdmin":true},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Rejected dangerous JSON key: "__proto__"/);
+  });
+
+  it('rejects constructor key in plain JSON glTF', () => {
+    const text = '{"constructor":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Rejected dangerous JSON key: "constructor"/);
+  });
+
+  it('rejects prototype key in plain JSON glTF', () => {
+    const text = '{"prototype":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Rejected dangerous JSON key: "prototype"/);
+  });
+
+  it('rejects __proto__ key in GLB JSON chunk', () => {
+    const text = '{"__proto__":{"isAdmin":true},"asset":{"version":"2.0"}}';
+    const jsonBytes = new TextEncoder().encode(text);
+    const padded = padTo4(jsonBytes, 0x20);
+    const totalLength = 12 + 8 + padded.byteLength;
+    const buf = new ArrayBuffer(totalLength);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+    view.setUint32(0, 0x46546C67, true);
+    view.setUint32(4, 2, true);
+    view.setUint32(8, totalLength, true);
+    view.setUint32(12, padded.byteLength, true);
+    view.setUint32(16, 0x4E4F534A, true);
+    bytes.set(padded, 20);
+    expect(() => parseContainer(buf)).toThrow(/Rejected dangerous JSON key: "__proto__"/);
+  });
+
+  it('rejects constructor key in GLB JSON chunk', () => {
+    const text = '{"constructor":{},"asset":{"version":"2.0"}}';
+    const jsonBytes = new TextEncoder().encode(text);
+    const padded = padTo4(jsonBytes, 0x20);
+    const totalLength = 12 + 8 + padded.byteLength;
+    const buf = new ArrayBuffer(totalLength);
+    const view = new DataView(buf);
+    const bytes = new Uint8Array(buf);
+    view.setUint32(0, 0x46546C67, true);
+    view.setUint32(4, 2, true);
+    view.setUint32(8, totalLength, true);
+    view.setUint32(12, padded.byteLength, true);
+    view.setUint32(16, 0x4E4F534A, true);
+    bytes.set(padded, 20);
+    expect(() => parseContainer(buf)).toThrow(/Rejected dangerous JSON key: "constructor"/);
+  });
+
+  // --- asset.version validation ---
+
+  it('throws when asset.version is missing in plain JSON glTF', () => {
+    const text = '{"asset":{}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset is missing entirely in plain JSON glTF', () => {
+    const text = '{}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version does not start with "2" in plain JSON glTF', () => {
+    const text = '{"asset":{"version":"1.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version is missing in GLB JSON chunk', () => {
+    const glb = buildGlb({ asset: {} });
+    expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version does not start with "2" in GLB JSON chunk', () => {
+    const glb = buildGlb({ asset: { version: '1.0' } });
+    expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
   it('reuses a single TextDecoder instance across multiple parses', async () => {
     const OriginalTextDecoder = globalThis.TextDecoder;
     let decoderInstanceCount = 0;

@@ -36,6 +36,33 @@ const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
+/** Keys that must never appear in a glTF JSON payload. */
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Parse a glTF JSON string with prototype-pollution protection and basic
+ * schema validation.
+ *
+ * @throws if the JSON contains a dangerous key (`__proto__`, `constructor`,
+ *         or `prototype`).
+ * @throws if `asset.version` is absent or does not start with `"2"`.
+ */
+function safeParseGltfJson(text: string): GltfAsset {
+  const parsed = JSON.parse(text, (key, value) => {
+    if (DANGEROUS_KEYS.has(key)) {
+      throw new Error(`Rejected dangerous JSON key: "${key}"`);
+    }
+    return value;
+  }) as GltfAsset;
+
+  if (typeof parsed?.asset?.version !== 'string' || !parsed.asset.version.startsWith('2')) {
+    throw new Error(
+      `Unsupported or missing glTF asset version: ${JSON.stringify(parsed?.asset?.version)}`,
+    );
+  }
+  return parsed;
+}
+
 export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
@@ -161,7 +188,7 @@ export function parseContainer(
     );
   }
   const text = UTF8_DECODER.decode(buffer);
-  const json = JSON.parse(text) as GltfAsset;
+  const json = safeParseGltfJson(text);
   return { json, binChunk: undefined };
 }
 
@@ -193,7 +220,7 @@ function parseGlb(buffer: ArrayBuffer): {
 
     if (chunkType === GLB_CHUNK_JSON) {
       const text = UTF8_DECODER.decode(chunkData);
-      json = JSON.parse(text) as GltfAsset;
+      json = safeParseGltfJson(text);
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;
     }

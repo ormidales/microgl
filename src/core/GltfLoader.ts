@@ -36,6 +36,93 @@ const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
+/**
+ * Deep-clone arbitrary JSON-like data into "data-only" structures:
+ *  - Objects are recreated with a null prototype (`Object.create(null)`).
+ *  - Arrays are recreated as plain arrays.
+ *
+ * This neutralises prototype-pollution vectors (`__proto__`, `constructor`,
+ * `prototype` keys) without rejecting spec-compliant glTFs that use those
+ * keys inside `extras` or extension payloads.
+ *
+ * An iterative (non-recursive) implementation is used to prevent adversarial
+ * or unusually deep JSON from causing a `RangeError: Maximum call stack size
+ * exceeded`. A hard nesting-depth cap is enforced instead.
+ */
+const DEEP_CLONE_MAX_DEPTH = 64;
+
+function deepCloneToDataOnly<T>(value: T): T {
+  type Task = {
+    parent: unknown[] | Record<string, unknown> | null;
+    key: number | string | null;
+    value: unknown;
+    depth: number;
+  };
+
+  let result: unknown;
+  const stack: Task[] = [{ parent: null, key: null, value, depth: 0 }];
+
+  while (stack.length > 0) {
+    const { parent, key, value: v, depth } = stack.pop()!;
+
+    if (depth > DEEP_CLONE_MAX_DEPTH) {
+      throw new Error(
+        `glTF JSON exceeds the maximum allowed nesting depth of ${DEEP_CLONE_MAX_DEPTH}.`,
+      );
+    }
+
+    let cloned: unknown;
+
+    if (Array.isArray(v)) {
+      cloned = [] as unknown[];
+      // Push children in reverse order so they are processed (and assigned) left-to-right.
+      for (let i = (v as unknown[]).length - 1; i >= 0; i--) {
+        stack.push({ parent: cloned as unknown[], key: i, value: (v as unknown[])[i], depth: depth + 1 });
+      }
+    } else if (v !== null && typeof v === 'object') {
+      cloned = Object.create(null) as Record<string, unknown>;
+      const keys = Object.keys(v as Record<string, unknown>);
+      // Push in reverse order so keys are processed in their natural order.
+      for (let i = keys.length - 1; i >= 0; i--) {
+        const k = keys[i];
+        stack.push({ parent: cloned as Record<string, unknown>, key: k, value: (v as Record<string, unknown>)[k], depth: depth + 1 });
+      }
+    } else {
+      // Primitives (`string`, `number`, `boolean`, `null`, `undefined`) are copied as-is.
+      cloned = v;
+    }
+
+    if (parent === null) {
+      result = cloned;
+    } else if (typeof key === 'number') {
+      (parent as unknown[])[key] = cloned;
+    } else {
+      (parent as Record<string, unknown>)[key!] = cloned;
+    }
+  }
+
+  return result as T;
+}
+
+/**
+ * Parse a glTF JSON string with prototype-pollution protection and basic
+ * schema validation.
+ *
+ * @throws if `asset.version` is absent or not a valid `MAJOR.MINOR` glTF 2.x
+ *         string (e.g. `"2.0"`).
+ */
+function safeParseGltfJson(text: string): GltfAsset {
+  const raw = JSON.parse(text) as unknown;
+  const parsed = deepCloneToDataOnly(raw) as GltfAsset;
+
+  if (typeof parsed?.asset?.version !== 'string' || !/^2\.\d+$/.test(parsed.asset.version)) {
+    throw new Error(
+      `Unsupported or missing glTF asset version: ${JSON.stringify(parsed?.asset?.version)}`,
+    );
+  }
+  return parsed;
+}
+
 export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
@@ -58,6 +145,16 @@ export interface GltfLoaderOptions {
   /**
    * When `true`, a non-unit quaternion found in a node's `rotation` field causes
    * `loadGltf` to throw an `Error` rather than silently normalizing it.
+   *
+   * URI validation notes:
+   * - Baseline protections (blocking absolute/protocol/scheme URIs, leading
+   *   slashes, backslashes, and path-traversal `..` segments) are always
+   *   enforced, regardless of this flag.
+   * - When `strict` is `true`, an additional URI character whitelist is applied
+   *   for external buffer references: only alphanumeric characters, dots,
+   *   hyphens, underscores, and forward slashes are permitted in the URI
+   *   (all non-`data:` scheme URIs must be simple relative paths).
+   *
    * Enable in development / CI to catch malformed assets early; leave `false`
    * (default) in production to be lenient with third-party exporters.
    */
@@ -92,7 +189,7 @@ export async function loadGltf(
     throw wrapGltfError('Failed to parse glTF container', e);
   }
 
-  const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
+  const buffers = await resolveBuffers(json, binChunk, options.resolveUri, options);
 
   let meshes: ParsedMesh[];
   try {
@@ -151,7 +248,7 @@ export function parseContainer(
     );
   }
   const text = UTF8_DECODER.decode(buffer);
-  const json = JSON.parse(text) as GltfAsset;
+  const json = safeParseGltfJson(text);
   return { json, binChunk: undefined };
 }
 
@@ -183,7 +280,7 @@ function parseGlb(buffer: ArrayBuffer): {
 
     if (chunkType === GLB_CHUNK_JSON) {
       const text = UTF8_DECODER.decode(chunkData);
-      json = JSON.parse(text) as GltfAsset;
+      json = safeParseGltfJson(text);
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;
     }
@@ -203,6 +300,76 @@ function parseGlb(buffer: ArrayBuffer): {
 // ---------------------------------------------------------------------------
 
 /**
+ * Validate an external buffer URI before forwarding it to the caller-supplied
+ * `resolveUri` callback. Rejects absolute URLs, protocol-relative URLs,
+ * absolute-path URIs, backslash/UNC paths, path-traversal segments, and null
+ * bytes — on both the raw URI and its percent-decoded form so that encoded
+ * bypasses (e.g. `%68%74%74%70:` → `http:`) are caught. When `strict` is
+ * `true`, only a safe subset of characters (alphanumeric, dot, hyphen,
+ * underscore, forward slash) is allowed in the URI.
+ *
+ * @throws {Error} If the URI is deemed unsafe.
+ */
+function validateExternalUri(uri: string, bufferIndex: number, strict?: boolean): void {
+  // Decode percent-encoded sequences so that checks apply to both raw and
+  // encoded forms (e.g. %68%74%74%70: → http:, %00 → null byte).
+  let decoded: string = uri;
+  try {
+    decoded = decodeURIComponent(uri);
+  } catch {
+    // If decoding fails, fall back to the original URI.
+    decoded = uri;
+  }
+
+  const candidates = [uri, decoded];
+
+  // Reject any URI containing a null byte, either literally or percent-encoded.
+  if (candidates.some((v) => v.includes('\0'))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI contains a null byte and is not allowed.`,
+    );
+  }
+
+  // Block any URI with a scheme (e.g. http:, https:, file:, ftp:, …) to
+  // prevent SSRF; also block protocol-relative URLs (//host/…).
+  if (
+    candidates.some(
+      (v) => /^[a-z][a-z0-9+.-]*:/i.test(v) || v.startsWith('//'),
+    )
+  ) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  // Block absolute paths (/etc/passwd) and Windows/UNC paths (\\server\share).
+  if (candidates.some((v) => v.startsWith('/') || v.includes('\\'))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  // Reject traversal segments ("..") on both raw and decoded input.
+  // Use a segment-boundary regex so "file..bin" is accepted but "../foo" is not.
+  const TRAVERSAL = /(^|[/\\])\.\.([/\\]|$)/;
+  if (candidates.some((v) => TRAVERSAL.test(v))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  if (strict && !candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
+      `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
+    );
+  }
+}
+
+/**
  * Build an array of `ArrayBuffer`s that correspond to the glTF `buffers`
  * array. Embedded data-URIs and the GLB binary chunk are handled inline;
  * external URIs are delegated to the optional `resolveUri` callback.
@@ -211,15 +378,31 @@ async function resolveBuffers(
   json: GltfAsset,
   binChunk: ArrayBuffer | undefined,
   resolveUri?: (uri: string) => Promise<ArrayBuffer>,
+  options?: GltfLoaderOptions,
 ): Promise<ArrayBuffer[]> {
   const gltfBuffers = json.buffers ?? [];
   const resolved: ArrayBuffer[] = [];
+
+  const assertByteLength = (buf: ArrayBuffer, declaredByteLength: number, index: number) => {
+    if (!Number.isFinite(declaredByteLength) || declaredByteLength < 0) {
+      throw new Error(
+        `Buffer ${index}: declared byteLength is not a valid non-negative number (got ${declaredByteLength}). ` +
+        `The asset may be corrupt or malformed.`,
+      );
+    }
+    if (buf.byteLength < declaredByteLength) {
+      throw new Error(
+        `Buffer ${index}: resolved data is ${buf.byteLength} bytes, ` +
+        `but the glTF asset declares ${declaredByteLength} bytes. The asset may be corrupt or truncated.`,
+      );
+    }
+  };
 
   let binChunkConsumed = false;
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
 
-    if (buf.uri === undefined) {
+    if (buf.uri === undefined || buf.uri === null) {
       // GLB embedded buffer (only one buffer may omit a URI and consume the binary chunk)
       if (!binChunk) {
         throw new Error(`Buffer ${i} has no URI and no GLB binary chunk is available.`);
@@ -230,17 +413,31 @@ async function resolveBuffers(
           `GLB only supports one embedded binary buffer.`,
         );
       }
+      assertByteLength(binChunk, buf.byteLength, i);
       resolved.push(binChunk);
       binChunkConsumed = true;
-    } else if (buf.uri.startsWith('data:')) {
-      resolved.push(await decodeDataUri(buf.uri));
     } else {
-      if (!resolveUri) {
+      if (typeof buf.uri !== 'string') {
         throw new Error(
-          `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
+          `Buffer ${i} has an invalid uri: expected a string, got ${typeof buf.uri} ` +
+          `(${JSON.stringify(buf.uri)}).`,
         );
       }
-      resolved.push(await resolveUri(buf.uri));
+      if (buf.uri.startsWith('data:')) {
+        const dataUriBuffer = await decodeDataUri(buf.uri);
+        assertByteLength(dataUriBuffer, buf.byteLength, i);
+        resolved.push(dataUriBuffer);
+      } else {
+        if (!resolveUri) {
+          throw new Error(
+            `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
+          );
+        }
+        validateExternalUri(buf.uri, i, options?.strict);
+        const externalBuffer = await resolveUri(buf.uri);
+        assertByteLength(externalBuffer, buf.byteLength, i);
+        resolved.push(externalBuffer);
+      }
     }
   }
 
@@ -249,12 +446,36 @@ async function resolveBuffers(
 
 /**
  * Decode a base64 data URI into an ArrayBuffer.
+ *
+ * Base64 data URIs are decoded locally via `atob` to avoid routing binary
+ * buffer contents through the Service Worker fetch pipeline.  `fetch` is used
+ * only for non-base64 data URIs, or as a last resort when `atob` fails.
  */
 async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   const commaIndex = uri.indexOf(',');
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
+
+  const header = uri.slice(0, commaIndex).toLowerCase();
+
+  // Fast path: decode base64 locally, avoiding the fetch/Service Worker pipeline.
+  let atobFailure: Error | undefined;
+  if (header.includes(';base64')) {
+    try {
+      const binary = atob(uri.slice(commaIndex + 1));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes.buffer;
+    } catch (err) {
+      // Fall through to fetch as a last resort when atob fails.
+      atobFailure = err instanceof Error ? err : new Error('invalid base64 payload');
+    }
+  }
+
+  // Fallback: use fetch for non-base64 data URIs, or when local decoding failed.
   let fetchFailure: Error | undefined;
   try {
     const response = await fetch(uri);
@@ -263,29 +484,20 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
     }
     fetchFailure = new Error(`status ${response.status}`);
   } catch (error) {
-    // Fall back to manual decoding when fetch fails (e.g. oversized data URI).
     fetchFailure = error instanceof Error ? error : new Error('network failure');
   }
-  const header = uri.slice(0, commaIndex).toLowerCase();
+
   if (!header.includes(';base64')) {
     const error = new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
     if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
     throw error;
   }
-  try {
-    const binary = atob(uri.slice(commaIndex + 1));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
-  } catch (error) {
-    const decodeFailure = error instanceof Error ? error : new Error('invalid base64 payload');
-    const fetchMessage = fetchFailure ? ` Initial fetch failure: ${fetchFailure.message}.` : '';
-    const decodeError = new Error(`Failed to decode base64 data URI via fallback: ${decodeFailure.message}.${fetchMessage}`);
-    if (fetchFailure) (decodeError as Error & { cause?: Error }).cause = fetchFailure;
-    throw decodeError;
-  }
+
+  // base64 URI where atob failed and fetch also failed — include both failure reasons.
+  const atobMessage = atobFailure ? ` Local decode failure: ${atobFailure.message}.` : '';
+  const error = new Error(`Failed to decode base64 data URI via fallback: ${fetchFailure?.message ?? 'unknown error'}.${atobMessage}`);
+  if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
+  throw error;
 }
 
 // ---------------------------------------------------------------------------

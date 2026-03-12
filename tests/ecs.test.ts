@@ -1209,6 +1209,18 @@ describe('OrbitalCameraSystem', () => {
     delete (globalThis as any).window;
   });
 
+  function mockWindowListeners() {
+    const windowAddCalls: unknown[][] = [];
+    const windowRemoveCalls: unknown[][] = [];
+    (globalThis as any).window.addEventListener = vi.fn((...args: unknown[]) => {
+      windowAddCalls.push(args);
+    });
+    (globalThis as any).window.removeEventListener = vi.fn((...args: unknown[]) => {
+      windowRemoveCalls.push(args);
+    });
+    return { windowAddCalls, windowRemoveCalls };
+  }
+
   it('declares required components', () => {
     const sys = new OrbitalCameraSystem();
     expect(sys.requiredComponents).toEqual(['Camera']);
@@ -1689,6 +1701,62 @@ describe('OrbitalCameraSystem', () => {
     const sys = new OrbitalCameraSystem();
     sys.attach(canvas);
     sys.detach();
+    expect(() => sys.detach()).not.toThrow();
+  });
+
+  it('multiple sequential attach() calls leave exactly one set of window-level handlers', () => {
+    const makeCanvas = () =>
+      ({
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }) as unknown as HTMLCanvasElement;
+
+    const { windowAddCalls, windowRemoveCalls } = mockWindowListeners();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(makeCanvas());
+    sys.attach(makeCanvas());
+    sys.attach(makeCanvas());
+
+    // After three attach() calls the net outstanding window adds minus removes
+    // must equal exactly one mouseup and one touchend handler.
+    expect(windowAddCalls.filter((c) => c[0] === 'mouseup').length -
+      windowRemoveCalls.filter((c) => c[0] === 'mouseup').length).toBe(1);
+    expect(windowAddCalls.filter((c) => c[0] === 'touchend').length -
+      windowRemoveCalls.filter((c) => c[0] === 'touchend').length).toBe(1);
+  });
+
+  it('re-attaching then detaching leaves zero window-level handlers', () => {
+    const makeCanvas = () =>
+      ({
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }) as unknown as HTMLCanvasElement;
+
+    const { windowAddCalls, windowRemoveCalls } = mockWindowListeners();
+
+    const sys = new OrbitalCameraSystem();
+    sys.attach(makeCanvas());
+    sys.attach(makeCanvas());
+    sys.detach();
+
+    expect(windowAddCalls.filter((c) => c[0] === 'mouseup').length -
+      windowRemoveCalls.filter((c) => c[0] === 'mouseup').length).toBe(0);
+    expect(windowAddCalls.filter((c) => c[0] === 'touchend').length -
+      windowRemoveCalls.filter((c) => c[0] === 'touchend').length).toBe(0);
+  });
+
+  it('attach() does not throw and skips window listeners when window is undefined (SSR)', () => {
+    const canvas = {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as HTMLCanvasElement;
+
+    // Simulate an SSR / Worker environment where window is not defined
+    delete (globalThis as any).window;
+
+    const sys = new OrbitalCameraSystem();
+    expect(() => sys.attach(canvas)).not.toThrow();
     expect(() => sys.detach()).not.toThrow();
   });
 });

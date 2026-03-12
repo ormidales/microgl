@@ -226,6 +226,99 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).toThrow(/does not contain a JSON chunk/);
   });
 
+  // --- prototype-pollution protection ---
+
+  it('allows __proto__ key in plain JSON glTF without polluting Object.prototype', () => {
+    const before = (Object.prototype as Record<string, unknown>)['isAdmin'];
+    const text = '{"__proto__":{"isAdmin":true},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+    expect((Object.prototype as Record<string, unknown>)['isAdmin']).toBe(before);
+  });
+
+  it('allows constructor key in plain JSON glTF without polluting Object.prototype', () => {
+    const text = '{"constructor":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
+  it('allows prototype key in plain JSON glTF without polluting Object.prototype', () => {
+    const text = '{"prototype":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
+  it('allows __proto__ key in GLB JSON chunk without polluting Object.prototype', () => {
+    const before = (Object.prototype as Record<string, unknown>)['isAdmin'];
+    const glb = buildGlb({ '__proto__': { isAdmin: true }, asset: { version: '2.0' } });
+    expect(() => parseContainer(glb)).not.toThrow();
+    expect((Object.prototype as Record<string, unknown>)['isAdmin']).toBe(before);
+  });
+
+  it('allows constructor key in GLB JSON chunk without throwing', () => {
+    const glb = buildGlb({ constructor: {}, asset: { version: '2.0' } });
+    expect(() => parseContainer(glb)).not.toThrow();
+  });
+
+  it('throws when plain JSON glTF nesting exceeds the maximum allowed depth', () => {
+    // Build an object nested deeper than DEEP_CLONE_MAX_DEPTH (64).
+    // Each level wraps the previous one in { extras: ... }.
+    let nested: Record<string, unknown> = {};
+    for (let i = 0; i < 66; i++) {
+      nested = { extras: nested };
+    }
+    const payload = JSON.stringify({ asset: { version: '2.0' }, ...nested });
+    const buf = new TextEncoder().encode(payload).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/exceeds the maximum allowed nesting depth/);
+  });
+
+  it('does not throw for JSON glTF nesting at exactly the maximum allowed depth', () => {
+    // Build an object with 63 wrapping levels, so the deepest node is processed at
+    // depth 64 (root=0, plus one for each wrapping). The check is `depth > 64`, so
+    // depth=64 is still permitted and does not throw.
+    let nested: Record<string, unknown> = {};
+    for (let i = 0; i < 63; i++) {
+      nested = { extras: nested };
+    }
+    const payload = JSON.stringify({ asset: { version: '2.0' }, ...nested });
+    const buf = new TextEncoder().encode(payload).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
+  // --- asset.version validation ---
+
+  it('throws when asset.version is missing in plain JSON glTF', () => {
+    const text = '{"asset":{}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset is missing entirely in plain JSON glTF', () => {
+    const text = '{}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version is not a valid 2.x string in plain JSON glTF', () => {
+    for (const version of ['1.0', '2', '20', '2evil']) {
+      const text = `{"asset":{"version":${JSON.stringify(version)}}}`;
+      const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+      expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+    }
+  });
+
+  it('throws when asset.version is missing in GLB JSON chunk', () => {
+    const glb = buildGlb({ asset: {} });
+    expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version is not a valid 2.x string in GLB JSON chunk', () => {
+    for (const version of ['1.0', '2', '20', '2evil']) {
+      const glb = buildGlb({ asset: { version } });
+      expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+    }
+  });
+
   it('reuses a single TextDecoder instance across multiple parses', async () => {
     const OriginalTextDecoder = globalThis.TextDecoder;
     let decoderInstanceCount = 0;
@@ -565,29 +658,25 @@ describe('loadGltf', () => {
     expect(result.meshes[0].indices.length).toBe(3);
   });
 
-  it('decodes data URI buffers via async fetch', async () => {
+  it('decodes data URI buffers locally without calling fetch', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:application/octet-stream;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as unknown as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
     } finally {
       fetchSpy.mockRestore();
     }
   });
 
-  it('falls back to direct base64 decoding when fetch rejects data URI', async () => {
+  it('decodes base64 data URI locally without calling fetch even when fetch would fail', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:application/octet-stream;base64,${base64}`;
@@ -598,7 +687,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
     } finally {
@@ -606,7 +695,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('keeps original fetch error context when fallback base64 decoding also fails', async () => {
+  it('uses fetch as last resort and preserves fetch error when atob fails and fetch also fails', async () => {
     const { json } = triangleAsset();
     const uri = 'data:application/octet-stream;base64,@@@';
     json.buffers = [{ uri, byteLength: 1 }];
@@ -616,7 +705,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       await expect(loadGltf(buffer)).rejects.toMatchObject({
-        message: expect.stringContaining('Initial fetch failure: CSP blocked data URI'),
+        message: expect.stringContaining('CSP blocked data URI'),
         cause: expect.objectContaining({ message: 'CSP blocked data URI' }),
       });
     } finally {
@@ -644,7 +733,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('attaches fetch status as cause when fetch returns non-OK and base64 decoding also fails', async () => {
+  it('uses fetch as last resort and preserves fetch status when atob fails and fetch returns non-OK', async () => {
     const { json } = triangleAsset();
     const uri = 'data:application/octet-stream;base64,@@@';
     json.buffers = [{ uri, byteLength: 1 }];
@@ -657,7 +746,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       await expect(loadGltf(buffer)).rejects.toMatchObject({
-        message: expect.stringContaining('Initial fetch failure: status 403'),
+        message: expect.stringContaining('status 403'),
         cause: expect.objectContaining({ message: 'status 403' }),
       });
     } finally {
@@ -665,22 +754,18 @@ describe('loadGltf', () => {
     }
   });
 
-  it('decodes data URI buffer without MIME type (data:;base64,...)', async () => {
+  it('decodes data URI without MIME type (data:;base64,...) locally without calling fetch', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as unknown as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
     } finally {
@@ -688,7 +773,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('falls back to direct base64 decoding for data URI without MIME type when fetch fails', async () => {
+  it('decodes data URI without MIME type (data:;base64,...) locally without calling fetch even when fetch would fail', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:;base64,${base64}`;
@@ -699,9 +784,28 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not call fetch for standard data:...;base64,... URIs', async () => {
+    // Regression guard: fetch must NOT be called for base64 data URIs to prevent
+    // binary buffer contents from being exposed to Service Workers.
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${base64}`, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.meshes).toHaveLength(1);
     } finally {
       fetchSpy.mockRestore();
     }
@@ -739,6 +843,164 @@ describe('loadGltf', () => {
     expect((err as Error).message).toMatch(/already been consumed/);
   });
 
+  it('treats a null uri as a missing URI and throws the "no GLB binary chunk" error', async () => {
+    // A malformed JSON glTF (not GLB) where buf.uri is explicitly null.
+    // null is treated as absent, so the loader expects a GLB binary chunk which is not present.
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: null, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/no GLB binary chunk/);
+  });
+
+  it('throws a descriptive error when buf.uri is a non-string type (number)', async () => {
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: 42, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/invalid uri/);
+    expect((err as Error).message).toMatch(/expected a string/);
+    expect((err as Error).message).toMatch(/number/);
+  });
+
+  it('throws a descriptive error when buf.uri is a non-string type (object)', async () => {
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: { href: 'models/x.bin' }, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/invalid uri/);
+    expect((err as Error).message).toMatch(/expected a string/);
+    expect((err as Error).message).toMatch(/object/);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Buffer byteLength integrity checks
+  // ---------------------------------------------------------------------------
+
+  it('throws when a GLB binary chunk is shorter than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    // Declare a byteLength larger than the actual binary chunk
+    json.buffers = [{ byteLength: bin.byteLength + 100 }];
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(new RegExp(String(bin.byteLength)));
+    expect((err as Error).message).toMatch(new RegExp(String(bin.byteLength + 100)));
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts a GLB binary chunk larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    // Declare a byteLength smaller than the actual binary chunk — this is valid
+    json.buffers = [{ byteLength: bin.byteLength }];
+    const paddedBin = new ArrayBuffer(bin.byteLength + 16);
+    new Uint8Array(paddedBin).set(new Uint8Array(bin));
+
+    const glb = buildGlb(json, paddedBin);
+    // Should load without error; downstream accessors only read up to byteLength
+    await expect(loadGltf(glb)).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when a data-URI buffer is shorter than declared byteLength', async () => {
+    const { json } = triangleAsset();
+    // Build a tiny 4-byte buffer but declare 1000 bytes
+    const tiny = new Uint8Array([1, 2, 3, 4]);
+    const b64 = btoa(String.fromCharCode(...tiny));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: 1000 }];
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/4/);
+    expect((err as Error).message).toMatch(/1000/);
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts a data-URI buffer larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    // Pad the binary data with extra trailing bytes so the resolved buffer is larger
+    // than declared, while keeping byteLength consistent with the bufferViews.
+    const paddedBytes = new Uint8Array(bin.byteLength + 16);
+    paddedBytes.set(new Uint8Array(bin));
+    const b64 = btoa(String.fromCharCode(...paddedBytes));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: bin.byteLength }];
+
+    const buffer = jsonToBuffer(json);
+    // Should not throw — extra trailing bytes are accepted
+    await expect(loadGltf(buffer)).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when an external URI buffer is shorter than declared byteLength', async () => {
+    const { json } = triangleAsset();
+    json.buffers = [{ uri: 'small.bin', byteLength: 1000 }];
+
+    const buffer = jsonToBuffer(json);
+    const smallBin = new ArrayBuffer(4);
+    const resolveUri = async (_uri: string) => smallBin;
+
+    const err = await loadGltf(buffer, { resolveUri }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/4/);
+    expect((err as Error).message).toMatch(/1000/);
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts an external URI buffer larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle.bin', byteLength: bin.byteLength }];
+    const largerBin = new ArrayBuffer(bin.byteLength + 64);
+    new Uint8Array(largerBin).set(new Uint8Array(bin));
+
+    const buffer = jsonToBuffer(json);
+    const resolveUri = async (_uri: string) => largerBin;
+
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when declared byteLength is NaN (malformed asset)', async () => {
+    const { json, bin } = triangleAsset();
+    // Force an invalid NaN byteLength to simulate a malformed JSON asset
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { byteLength: NaN };
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/not a valid non-negative number/);
+  });
+
+  it('throws when declared byteLength is negative (malformed asset)', async () => {
+    const { json, bin } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { byteLength: -1 };
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/not a valid non-negative number/);
+  });
+
   it('resolves external buffer URIs via callback', async () => {
     const { json, bin } = triangleAsset();
     json.buffers = [{ uri: 'triangle.bin', byteLength: bin.byteLength }];
@@ -769,6 +1031,172 @@ describe('loadGltf', () => {
 
     const buffer = jsonToBuffer(json);
     await expect(loadGltf(buffer)).rejects.toThrow(/no resolveUri callback/);
+  });
+
+  // ---------------------------------------------------------------------------
+  // External URI validation (SSRF / path traversal)
+  // ---------------------------------------------------------------------------
+
+  it('rejects path traversal URI "../../../etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '../../../etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects path traversal URI "subdir/../../../secret.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'subdir/../../../secret.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute HTTP URI "http://evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'http://evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute HTTPS URI "https://evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'https://evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects file:// URI "file:///etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'file:///etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects protocol-relative URI "//evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '//evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects URI containing a null byte', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle\0.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/null byte/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('allows a valid simple relative URI without strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/triangle.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('models/triangle.bin');
+  });
+
+  it('allows a valid simple relative URI in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/triangle.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('models/triangle.bin');
+  });
+
+  it('rejects URI with special characters in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/my file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).rejects.toThrow(/not permitted in strict mode/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects URL-encoded path traversal URI "%2e%2e%2fetc%2fpasswd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '%2e%2e%2fetc%2fpasswd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-http/file scheme URI "ftp://files.example.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'ftp://files.example.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects percent-encoded scheme URI "%68%74%74%70:%2f%2fevil.com"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '%68%74%74%70:%2f%2fevil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects percent-encoded null byte URI "triangle%00.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle%00.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/null byte/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute path URI "/etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '/etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects Windows/UNC-style path URI "\\\\server\\share\\file.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '\\\\server\\share\\file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('allows URI with double-dot within a filename segment "file..bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'file..bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('file..bin');
+  });
+
+  it('allows URI with spaces in non-strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'my file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('my file.bin');
   });
 
   it('handles meshes with normals and UVs', async () => {
@@ -1442,9 +1870,9 @@ describe('loadGltf', () => {
   });
 
   it('preserves fetch error cause chain from resolveBuffers without re-wrapping', async () => {
-    // Use invalid base64 so decodeDataUri's atob fallback also fails, forcing the
-    // error path that attaches the original fetch failure as `cause`. The fetch is
-    // mocked to return a non-OK 403 response, which is what decodeDataUri stores.
+    // Use invalid base64 so decodeDataUri's local atob decoding fails, triggering
+    // the fetch fallback.  The fetch is mocked to return a non-OK 403 response,
+    // which decodeDataUri attaches as `cause` on the thrown error.
     const { json, bin } = triangleAsset();
     const uri = `data:application/octet-stream;base64,@@@invalid`; // invalid base64 → atob fallback throws
     json.buffers = [{ uri, byteLength: bin.byteLength }];

@@ -25,26 +25,26 @@ export class ShaderCache {
    * @returns Hex string of the unsigned 32-bit FNV-1a hash.
    */
   private static fnv1aSources(vertSrc: string, fragSrc: string, offsetBasis: number): string {
-    let hash = offsetBasis;
+    let hash = offsetBasis >>> 0;
     const vLen = vertSrc.length;
     for (let i = 0; i < vLen; i++) {
-      hash ^= vertSrc.charCodeAt(i);
-      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+      hash = ((hash ^ vertSrc.charCodeAt(i)) >>> 0);
+      hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
     }
-    hash ^= (vLen >>> 24) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= (vLen >>> 16) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= (vLen >>> 8) & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
-    hash ^= vLen & 0xff;
-    hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+    hash = ((hash ^ ((vLen >>> 24) & 0xff)) >>> 0);
+    hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
+    hash = ((hash ^ ((vLen >>> 16) & 0xff)) >>> 0);
+    hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
+    hash = ((hash ^ ((vLen >>> 8) & 0xff)) >>> 0);
+    hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
+    hash = ((hash ^ (vLen & 0xff)) >>> 0);
+    hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
     const fLen = fragSrc.length;
     for (let i = 0; i < fLen; i++) {
-      hash ^= fragSrc.charCodeAt(i);
-      hash = Math.imul(hash, ShaderCache.FNV1A_PRIME);
+      hash = ((hash ^ fragSrc.charCodeAt(i)) >>> 0);
+      hash = (Math.imul(hash, ShaderCache.FNV1A_PRIME) >>> 0);
     }
-    return (hash >>> 0).toString(16);
+    return hash.toString(16);
   }
 
   /**

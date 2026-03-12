@@ -24,9 +24,8 @@ describe('Content-Security-Policy', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
       const csp = extractCspContent(html);
-      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
-      const cspValue = csp as string;
-      expect(cspValue).not.toContain("'unsafe-eval'");
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
+      expect(csp).not.toContain("'unsafe-eval'");
     }
   });
 
@@ -34,9 +33,8 @@ describe('Content-Security-Policy', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
       const csp = extractCspContent(html);
-      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
-      const cspValue = csp as string;
-      expect(cspValue).toContain("object-src 'none'");
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
+      expect(csp).toContain("object-src 'none'");
     }
   });
 
@@ -44,9 +42,8 @@ describe('Content-Security-Policy', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
       const csp = extractCspContent(html);
-      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
-      const cspValue = csp as string;
-      expect(cspValue).toContain("base-uri 'self'");
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
+      expect(csp).toContain("base-uri 'self'");
     }
   });
 });

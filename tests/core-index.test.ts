@@ -26,10 +26,10 @@ describe('core root index exports', () => {
   });
 
   it('DEFAULT_VERTEX_SOURCE barrel export comment includes a @security note', () => {
-    expect(coreIndexSource).toMatch(/@security[^]*?export \{ DEFAULT_VERTEX_SOURCE \}/);
+    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_VERTEX_SOURCE \}/);
   });
 
   it('DEFAULT_FRAGMENT_SOURCE barrel export comment includes a @security note', () => {
-    expect(coreIndexSource).toMatch(/@security[^]*?export \{ DEFAULT_FRAGMENT_SOURCE \}/);
+    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_FRAGMENT_SOURCE \}/);
   });
 });

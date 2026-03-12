@@ -226,6 +226,74 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).toThrow(/does not contain a JSON chunk/);
   });
 
+  // --- prototype-pollution protection ---
+
+  it('allows __proto__ key in plain JSON glTF without polluting Object.prototype', () => {
+    const before = (Object.prototype as Record<string, unknown>)['isAdmin'];
+    const text = '{"__proto__":{"isAdmin":true},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+    expect((Object.prototype as Record<string, unknown>)['isAdmin']).toBe(before);
+  });
+
+  it('allows constructor key in plain JSON glTF without polluting Object.prototype', () => {
+    const text = '{"constructor":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
+  it('allows prototype key in plain JSON glTF without polluting Object.prototype', () => {
+    const text = '{"prototype":{},"asset":{"version":"2.0"}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
+  it('allows __proto__ key in GLB JSON chunk without polluting Object.prototype', () => {
+    const before = (Object.prototype as Record<string, unknown>)['isAdmin'];
+    const glb = buildGlb({ '__proto__': { isAdmin: true }, asset: { version: '2.0' } });
+    expect(() => parseContainer(glb)).not.toThrow();
+    expect((Object.prototype as Record<string, unknown>)['isAdmin']).toBe(before);
+  });
+
+  it('allows constructor key in GLB JSON chunk without throwing', () => {
+    const glb = buildGlb({ constructor: {}, asset: { version: '2.0' } });
+    expect(() => parseContainer(glb)).not.toThrow();
+  });
+
+  // --- asset.version validation ---
+
+  it('throws when asset.version is missing in plain JSON glTF', () => {
+    const text = '{"asset":{}}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset is missing entirely in plain JSON glTF', () => {
+    const text = '{}';
+    const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version is not a valid 2.x string in plain JSON glTF', () => {
+    for (const version of ['1.0', '2', '20', '2evil']) {
+      const text = `{"asset":{"version":${JSON.stringify(version)}}}`;
+      const buf = new TextEncoder().encode(text).buffer as ArrayBuffer;
+      expect(() => parseContainer(buf)).toThrow(/Unsupported or missing glTF asset version/);
+    }
+  });
+
+  it('throws when asset.version is missing in GLB JSON chunk', () => {
+    const glb = buildGlb({ asset: {} });
+    expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+  });
+
+  it('throws when asset.version is not a valid 2.x string in GLB JSON chunk', () => {
+    for (const version of ['1.0', '2', '20', '2evil']) {
+      const glb = buildGlb({ asset: { version } });
+      expect(() => parseContainer(glb)).toThrow(/Unsupported or missing glTF asset version/);
+    }
+  });
+
   it('reuses a single TextDecoder instance across multiple parses', async () => {
     const OriginalTextDecoder = globalThis.TextDecoder;
     let decoderInstanceCount = 0;

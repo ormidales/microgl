@@ -36,26 +36,49 @@ const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
 
-/** Keys that must never appear in a glTF JSON payload. */
-const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+/**
+ * Deep-clone arbitrary JSON-like data into "data-only" structures:
+ *  - Objects are recreated with a null prototype (`Object.create(null)`).
+ *  - Arrays are recreated as plain arrays.
+ *
+ * This neutralises prototype-pollution vectors (`__proto__`, `constructor`,
+ * `prototype` keys) without rejecting spec-compliant glTFs that use those
+ * keys inside `extras` or extension payloads.
+ */
+function deepCloneToDataOnly<T>(value: T): T {
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    for (let i = 0; i < value.length; i++) {
+      clone[i] = deepCloneToDataOnly((value as unknown[])[i]);
+    }
+    return clone as unknown as T;
+  }
+
+  if (value !== null && typeof value === 'object') {
+    const source = value as Record<string, unknown>;
+    const clone = Object.create(null) as Record<string, unknown>;
+    for (const key of Object.keys(source)) {
+      clone[key] = deepCloneToDataOnly(source[key]);
+    }
+    return clone as unknown as T;
+  }
+
+  // Primitives (`string`, `number`, `boolean`, `null`, `undefined`) are returned as-is.
+  return value;
+}
 
 /**
  * Parse a glTF JSON string with prototype-pollution protection and basic
  * schema validation.
  *
- * @throws if the JSON contains a dangerous key (`__proto__`, `constructor`,
- *         or `prototype`).
- * @throws if `asset.version` is absent or does not start with `"2"`.
+ * @throws if `asset.version` is absent or not a valid `MAJOR.MINOR` glTF 2.x
+ *         string (e.g. `"2.0"`).
  */
 function safeParseGltfJson(text: string): GltfAsset {
-  const parsed = JSON.parse(text, (key, value) => {
-    if (DANGEROUS_KEYS.has(key)) {
-      throw new Error(`Rejected dangerous JSON key: "${key}"`);
-    }
-    return value;
-  }) as GltfAsset;
+  const raw = JSON.parse(text) as unknown;
+  const parsed = deepCloneToDataOnly(raw) as GltfAsset;
 
-  if (typeof parsed?.asset?.version !== 'string' || !parsed.asset.version.startsWith('2')) {
+  if (typeof parsed?.asset?.version !== 'string' || !/^2\.\d+$/.test(parsed.asset.version)) {
     throw new Error(
       `Unsupported or missing glTF asset version: ${JSON.stringify(parsed?.asset?.version)}`,
     );

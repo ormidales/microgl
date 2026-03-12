@@ -58,6 +58,16 @@ export interface GltfLoaderOptions {
   /**
    * When `true`, a non-unit quaternion found in a node's `rotation` field causes
    * `loadGltf` to throw an `Error` rather than silently normalizing it.
+   *
+   * URI validation notes:
+   * - Baseline protections (blocking absolute/protocol/scheme URIs, leading
+   *   slashes, backslashes, and path-traversal `..` segments) are always
+   *   enforced, regardless of this flag.
+   * - When `strict` is `true`, an additional URI character whitelist is applied
+   *   for external buffer references: only alphanumeric characters, dots,
+   *   hyphens, underscores, and forward slashes are permitted in the URI
+   *   (all non-`data:` scheme URIs must be simple relative paths).
+   *
    * Enable in development / CI to catch malformed assets early; leave `false`
    * (default) in production to be lenient with third-party exporters.
    */
@@ -92,7 +102,7 @@ export async function loadGltf(
     throw wrapGltfError('Failed to parse glTF container', e);
   }
 
-  const buffers = await resolveBuffers(json, binChunk, options.resolveUri);
+  const buffers = await resolveBuffers(json, binChunk, options.resolveUri, options);
 
   let meshes: ParsedMesh[];
   try {
@@ -203,6 +213,76 @@ function parseGlb(buffer: ArrayBuffer): {
 // ---------------------------------------------------------------------------
 
 /**
+ * Validate an external buffer URI before forwarding it to the caller-supplied
+ * `resolveUri` callback. Rejects absolute URLs, protocol-relative URLs,
+ * absolute-path URIs, backslash/UNC paths, path-traversal segments, and null
+ * bytes — on both the raw URI and its percent-decoded form so that encoded
+ * bypasses (e.g. `%68%74%74%70:` → `http:`) are caught. When `strict` is
+ * `true`, only a safe subset of characters (alphanumeric, dot, hyphen,
+ * underscore, forward slash) is allowed in the URI.
+ *
+ * @throws {Error} If the URI is deemed unsafe.
+ */
+function validateExternalUri(uri: string, bufferIndex: number, strict?: boolean): void {
+  // Decode percent-encoded sequences so that checks apply to both raw and
+  // encoded forms (e.g. %68%74%74%70: → http:, %00 → null byte).
+  let decoded: string = uri;
+  try {
+    decoded = decodeURIComponent(uri);
+  } catch {
+    // If decoding fails, fall back to the original URI.
+    decoded = uri;
+  }
+
+  const candidates = [uri, decoded];
+
+  // Reject any URI containing a null byte, either literally or percent-encoded.
+  if (candidates.some((v) => v.includes('\0'))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI contains a null byte and is not allowed.`,
+    );
+  }
+
+  // Block any URI with a scheme (e.g. http:, https:, file:, ftp:, …) to
+  // prevent SSRF; also block protocol-relative URLs (//host/…).
+  if (
+    candidates.some(
+      (v) => /^[a-z][a-z0-9+.-]*:/i.test(v) || v.startsWith('//'),
+    )
+  ) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  // Block absolute paths (/etc/passwd) and Windows/UNC paths (\\server\share).
+  if (candidates.some((v) => v.startsWith('/') || v.includes('\\'))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  // Reject traversal segments ("..") on both raw and decoded input.
+  // Use a segment-boundary regex so "file..bin" is accepted but "../foo" is not.
+  const TRAVERSAL = /(^|[/\\])\.\.([/\\]|$)/;
+  if (candidates.some((v) => TRAVERSAL.test(v))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" is not allowed. ` +
+      `Only relative paths without traversal sequences are permitted.`,
+    );
+  }
+
+  if (strict && !candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
+    throw new Error(
+      `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
+      `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
+    );
+  }
+}
+
+/**
  * Build an array of `ArrayBuffer`s that correspond to the glTF `buffers`
  * array. Embedded data-URIs and the GLB binary chunk are handled inline;
  * external URIs are delegated to the optional `resolveUri` callback.
@@ -211,6 +291,7 @@ async function resolveBuffers(
   json: GltfAsset,
   binChunk: ArrayBuffer | undefined,
   resolveUri?: (uri: string) => Promise<ArrayBuffer>,
+  options?: GltfLoaderOptions,
 ): Promise<ArrayBuffer[]> {
   const gltfBuffers = json.buffers ?? [];
   const resolved: ArrayBuffer[] = [];
@@ -240,6 +321,7 @@ async function resolveBuffers(
           `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
         );
       }
+      validateExternalUri(buf.uri, i, options?.strict);
       resolved.push(await resolveUri(buf.uri));
     }
   }

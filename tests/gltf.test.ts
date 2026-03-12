@@ -771,6 +771,172 @@ describe('loadGltf', () => {
     await expect(loadGltf(buffer)).rejects.toThrow(/no resolveUri callback/);
   });
 
+  // ---------------------------------------------------------------------------
+  // External URI validation (SSRF / path traversal)
+  // ---------------------------------------------------------------------------
+
+  it('rejects path traversal URI "../../../etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '../../../etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects path traversal URI "subdir/../../../secret.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'subdir/../../../secret.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute HTTP URI "http://evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'http://evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute HTTPS URI "https://evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'https://evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects file:// URI "file:///etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'file:///etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects protocol-relative URI "//evil.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '//evil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects URI containing a null byte', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle\0.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/null byte/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('allows a valid simple relative URI without strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/triangle.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('models/triangle.bin');
+  });
+
+  it('allows a valid simple relative URI in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/triangle.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('models/triangle.bin');
+  });
+
+  it('rejects URI with special characters in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'models/my file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).rejects.toThrow(/not permitted in strict mode/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects URL-encoded path traversal URI "%2e%2e%2fetc%2fpasswd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '%2e%2e%2fetc%2fpasswd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-http/file scheme URI "ftp://files.example.com/payload.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'ftp://files.example.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects percent-encoded scheme URI "%68%74%74%70:%2f%2fevil.com"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '%68%74%74%70:%2f%2fevil.com/payload.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects percent-encoded null byte URI "triangle%00.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle%00.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/null byte/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects absolute path URI "/etc/passwd"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '/etc/passwd', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('rejects Windows/UNC-style path URI "\\\\server\\share\\file.bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '\\\\server\\share\\file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('allows URI with double-dot within a filename segment "file..bin"', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'file..bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('file..bin');
+  });
+
+  it('allows URI with spaces in non-strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'my file.bin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith('my file.bin');
+  });
+
   it('handles meshes with normals and UVs', async () => {
     // 3 vertices × (3 pos + 3 normal + 2 uv) = 3×8 = 24 floats = 96 bytes
     // 3 indices = 6 bytes

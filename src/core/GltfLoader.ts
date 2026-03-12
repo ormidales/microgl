@@ -44,27 +44,64 @@ const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
  * This neutralises prototype-pollution vectors (`__proto__`, `constructor`,
  * `prototype` keys) without rejecting spec-compliant glTFs that use those
  * keys inside `extras` or extension payloads.
+ *
+ * An iterative (non-recursive) implementation is used to prevent adversarial
+ * or unusually deep JSON from causing a `RangeError: Maximum call stack size
+ * exceeded`. A hard nesting-depth cap is enforced instead.
  */
+const DEEP_CLONE_MAX_DEPTH = 64;
+
 function deepCloneToDataOnly<T>(value: T): T {
-  if (Array.isArray(value)) {
-    const clone: unknown[] = [];
-    for (let i = 0; i < value.length; i++) {
-      clone[i] = deepCloneToDataOnly((value as unknown[])[i]);
+  type Task = {
+    parent: unknown[] | Record<string, unknown> | null;
+    key: number | string | null;
+    value: unknown;
+    depth: number;
+  };
+
+  let result: unknown;
+  const stack: Task[] = [{ parent: null, key: null, value, depth: 0 }];
+
+  while (stack.length > 0) {
+    const { parent, key, value: v, depth } = stack.pop()!;
+
+    if (depth > DEEP_CLONE_MAX_DEPTH) {
+      throw new Error(
+        `glTF JSON exceeds the maximum allowed nesting depth of ${DEEP_CLONE_MAX_DEPTH}.`,
+      );
     }
-    return clone as unknown as T;
+
+    let cloned: unknown;
+
+    if (Array.isArray(v)) {
+      cloned = [] as unknown[];
+      // Push children in reverse order so they are processed (and assigned) left-to-right.
+      for (let i = (v as unknown[]).length - 1; i >= 0; i--) {
+        stack.push({ parent: cloned as unknown[], key: i, value: (v as unknown[])[i], depth: depth + 1 });
+      }
+    } else if (v !== null && typeof v === 'object') {
+      cloned = Object.create(null) as Record<string, unknown>;
+      const keys = Object.keys(v as Record<string, unknown>);
+      // Push in reverse order so keys are processed in their natural order.
+      for (let i = keys.length - 1; i >= 0; i--) {
+        const k = keys[i];
+        stack.push({ parent: cloned as Record<string, unknown>, key: k, value: (v as Record<string, unknown>)[k], depth: depth + 1 });
+      }
+    } else {
+      // Primitives (`string`, `number`, `boolean`, `null`, `undefined`) are copied as-is.
+      cloned = v;
+    }
+
+    if (parent === null) {
+      result = cloned;
+    } else if (typeof key === 'number') {
+      (parent as unknown[])[key] = cloned;
+    } else {
+      (parent as Record<string, unknown>)[key!] = cloned;
+    }
   }
 
-  if (value !== null && typeof value === 'object') {
-    const source = value as Record<string, unknown>;
-    const clone = Object.create(null) as Record<string, unknown>;
-    for (const key of Object.keys(source)) {
-      clone[key] = deepCloneToDataOnly(source[key]);
-    }
-    return clone as unknown as T;
-  }
-
-  // Primitives (`string`, `number`, `boolean`, `null`, `undefined`) are returned as-is.
-  return value;
+  return result as T;
 }
 
 /**
@@ -365,7 +402,7 @@ async function resolveBuffers(
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
 
-    if (buf.uri === undefined) {
+    if (buf.uri === undefined || buf.uri === null) {
       // GLB embedded buffer (only one buffer may omit a URI and consume the binary chunk)
       if (!binChunk) {
         throw new Error(`Buffer ${i} has no URI and no GLB binary chunk is available.`);
@@ -379,20 +416,28 @@ async function resolveBuffers(
       assertByteLength(binChunk, buf.byteLength, i);
       resolved.push(binChunk);
       binChunkConsumed = true;
-    } else if (buf.uri.startsWith('data:')) {
-      const dataUriBuffer = await decodeDataUri(buf.uri);
-      assertByteLength(dataUriBuffer, buf.byteLength, i);
-      resolved.push(dataUriBuffer);
     } else {
-      if (!resolveUri) {
+      if (typeof buf.uri !== 'string') {
         throw new Error(
-          `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
+          `Buffer ${i} has an invalid uri: expected a string, got ${typeof buf.uri} ` +
+          `(${JSON.stringify(buf.uri)}).`,
         );
       }
-      validateExternalUri(buf.uri, i, options?.strict);
-      const externalBuffer = await resolveUri(buf.uri);
-      assertByteLength(externalBuffer, buf.byteLength, i);
-      resolved.push(externalBuffer);
+      if (buf.uri.startsWith('data:')) {
+        const dataUriBuffer = await decodeDataUri(buf.uri);
+        assertByteLength(dataUriBuffer, buf.byteLength, i);
+        resolved.push(dataUriBuffer);
+      } else {
+        if (!resolveUri) {
+          throw new Error(
+            `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
+          );
+        }
+        validateExternalUri(buf.uri, i, options?.strict);
+        const externalBuffer = await resolveUri(buf.uri);
+        assertByteLength(externalBuffer, buf.byteLength, i);
+        resolved.push(externalBuffer);
+      }
     }
   }
 

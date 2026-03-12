@@ -260,6 +260,31 @@ describe('parseContainer', () => {
     expect(() => parseContainer(glb)).not.toThrow();
   });
 
+  it('throws when plain JSON glTF nesting exceeds the maximum allowed depth', () => {
+    // Build an object nested deeper than DEEP_CLONE_MAX_DEPTH (64).
+    // Each level wraps the previous one in { extras: ... }.
+    let nested: Record<string, unknown> = {};
+    for (let i = 0; i < 66; i++) {
+      nested = { extras: nested };
+    }
+    const payload = JSON.stringify({ asset: { version: '2.0' }, ...nested });
+    const buf = new TextEncoder().encode(payload).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).toThrow(/exceeds the maximum allowed nesting depth/);
+  });
+
+  it('does not throw for JSON glTF nesting at exactly the maximum allowed depth', () => {
+    // Build an object with 63 wrapping levels, so the deepest node is processed at
+    // depth 64 (root=0, plus one for each wrapping). The check is `depth > 64`, so
+    // depth=64 is still permitted and does not throw.
+    let nested: Record<string, unknown> = {};
+    for (let i = 0; i < 63; i++) {
+      nested = { extras: nested };
+    }
+    const payload = JSON.stringify({ asset: { version: '2.0' }, ...nested });
+    const buf = new TextEncoder().encode(payload).buffer as ArrayBuffer;
+    expect(() => parseContainer(buf)).not.toThrow();
+  });
+
   // --- asset.version validation ---
 
   it('throws when asset.version is missing in plain JSON glTF', () => {
@@ -816,6 +841,48 @@ describe('loadGltf', () => {
     expect((err as Error).message).toMatch(/Buffer 1/);
     // Error message must mention the binary chunk already being consumed
     expect((err as Error).message).toMatch(/already been consumed/);
+  });
+
+  it('treats a null uri as a missing URI and throws the "no GLB binary chunk" error', async () => {
+    // A malformed JSON glTF (not GLB) where buf.uri is explicitly null.
+    // null is treated as absent, so the loader expects a GLB binary chunk which is not present.
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: null, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/no GLB binary chunk/);
+  });
+
+  it('throws a descriptive error when buf.uri is a non-string type (number)', async () => {
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: 42, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/invalid uri/);
+    expect((err as Error).message).toMatch(/expected a string/);
+    expect((err as Error).message).toMatch(/number/);
+  });
+
+  it('throws a descriptive error when buf.uri is a non-string type (object)', async () => {
+    const { json } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { uri: { href: 'models/x.bin' }, byteLength: 42 };
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/invalid uri/);
+    expect((err as Error).message).toMatch(/expected a string/);
+    expect((err as Error).message).toMatch(/object/);
   });
 
   // ---------------------------------------------------------------------------

@@ -23,7 +23,8 @@ describe('Content-Security-Policy', () => {
   it('disallows unsafe-eval in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
+      const csp = extractCspContent(html);
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
       expect(csp).not.toContain("'unsafe-eval'");
     }
   });
@@ -31,7 +32,8 @@ describe('Content-Security-Policy', () => {
   it('restricts object-src to none in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
+      const csp = extractCspContent(html);
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
       expect(csp).toContain("object-src 'none'");
     }
   });
@@ -39,7 +41,8 @@ describe('Content-Security-Policy', () => {
   it('restricts base-uri to self in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
+      const csp = extractCspContent(html);
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
       expect(csp).toContain("base-uri 'self'");
     }
   });

@@ -347,6 +347,12 @@ async function resolveBuffers(
   const resolved: ArrayBuffer[] = [];
 
   const assertByteLength = (buf: ArrayBuffer, declaredByteLength: number, index: number) => {
+    if (!Number.isFinite(declaredByteLength) || declaredByteLength < 0) {
+      throw new Error(
+        `Buffer ${index}: declared byteLength is not a valid non-negative number (got ${declaredByteLength}). ` +
+        `The asset may be corrupt or malformed.`,
+      );
+    }
     if (buf.byteLength < declaredByteLength) {
       throw new Error(
         `Buffer ${index}: resolved data is ${buf.byteLength} bytes, ` +

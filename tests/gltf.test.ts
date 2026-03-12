@@ -868,13 +868,15 @@ describe('loadGltf', () => {
 
   it('accepts a data-URI buffer larger than declared byteLength', async () => {
     const { json, bin } = triangleAsset();
-    const bytes = new Uint8Array(bin);
-    const b64 = btoa(String.fromCharCode(...bytes));
-    // Declare fewer bytes than the data URI actually contains
-    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: 1 }];
+    // Pad the binary data with extra trailing bytes so the resolved buffer is larger
+    // than declared, while keeping byteLength consistent with the bufferViews.
+    const paddedBytes = new Uint8Array(bin.byteLength + 16);
+    paddedBytes.set(new Uint8Array(bin));
+    const b64 = btoa(String.fromCharCode(...paddedBytes));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: bin.byteLength }];
 
     const buffer = jsonToBuffer(json);
-    // Should not throw — extra bytes are ignored by downstream accessors
+    // Should not throw — extra trailing bytes are accepted
     await expect(loadGltf(buffer)).resolves.toMatchObject({ meshes: expect.any(Array) });
   });
 
@@ -905,6 +907,31 @@ describe('loadGltf', () => {
     const resolveUri = async (_uri: string) => largerBin;
 
     await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when declared byteLength is NaN (malformed asset)', async () => {
+    const { json, bin } = triangleAsset();
+    // Force an invalid NaN byteLength to simulate a malformed JSON asset
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { byteLength: NaN };
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/not a valid non-negative number/);
+  });
+
+  it('throws when declared byteLength is negative (malformed asset)', async () => {
+    const { json, bin } = triangleAsset();
+    (json.buffers as unknown as Array<Record<string, unknown>>)[0] = { byteLength: -1 };
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/not a valid non-negative number/);
   });
 
   it('resolves external buffer URIs via callback', async () => {

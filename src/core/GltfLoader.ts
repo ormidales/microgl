@@ -381,12 +381,36 @@ async function resolveBuffers(
 
 /**
  * Decode a base64 data URI into an ArrayBuffer.
+ *
+ * Base64 data URIs are decoded locally via `atob` to avoid routing binary
+ * buffer contents through the Service Worker fetch pipeline.  `fetch` is used
+ * only for non-base64 data URIs, or as a last resort when `atob` fails.
  */
 async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   const commaIndex = uri.indexOf(',');
   if (commaIndex === -1) {
     throw new Error('Invalid data URI: no comma separator found.');
   }
+
+  const header = uri.slice(0, commaIndex).toLowerCase();
+
+  // Fast path: decode base64 locally, avoiding the fetch/Service Worker pipeline.
+  let atobFailure: Error | undefined;
+  if (header.includes(';base64')) {
+    try {
+      const binary = atob(uri.slice(commaIndex + 1));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes.buffer;
+    } catch (err) {
+      // Fall through to fetch as a last resort when atob fails.
+      atobFailure = err instanceof Error ? err : new Error('invalid base64 payload');
+    }
+  }
+
+  // Fallback: use fetch for non-base64 data URIs, or when local decoding failed.
   let fetchFailure: Error | undefined;
   try {
     const response = await fetch(uri);
@@ -395,29 +419,20 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
     }
     fetchFailure = new Error(`status ${response.status}`);
   } catch (error) {
-    // Fall back to manual decoding when fetch fails (e.g. oversized data URI).
     fetchFailure = error instanceof Error ? error : new Error('network failure');
   }
-  const header = uri.slice(0, commaIndex).toLowerCase();
+
   if (!header.includes(';base64')) {
     const error = new Error(`Failed to decode data URI (${fetchFailure?.message ?? 'unsupported format'}): expected base64 payload.`);
     if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
     throw error;
   }
-  try {
-    const binary = atob(uri.slice(commaIndex + 1));
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return bytes.buffer;
-  } catch (error) {
-    const decodeFailure = error instanceof Error ? error : new Error('invalid base64 payload');
-    const fetchMessage = fetchFailure ? ` Initial fetch failure: ${fetchFailure.message}.` : '';
-    const decodeError = new Error(`Failed to decode base64 data URI via fallback: ${decodeFailure.message}.${fetchMessage}`);
-    if (fetchFailure) (decodeError as Error & { cause?: Error }).cause = fetchFailure;
-    throw decodeError;
-  }
+
+  // base64 URI where atob failed and fetch also failed — include both failure reasons.
+  const atobMessage = atobFailure ? ` Local decode failure: ${atobFailure.message}.` : '';
+  const error = new Error(`Failed to decode base64 data URI via fallback: ${fetchFailure?.message ?? 'unknown error'}.${atobMessage}`);
+  if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
+  throw error;
 }
 
 // ---------------------------------------------------------------------------

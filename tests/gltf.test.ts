@@ -633,29 +633,25 @@ describe('loadGltf', () => {
     expect(result.meshes[0].indices.length).toBe(3);
   });
 
-  it('decodes data URI buffers via async fetch', async () => {
+  it('decodes data URI buffers locally without calling fetch', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:application/octet-stream;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as unknown as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
     } finally {
       fetchSpy.mockRestore();
     }
   });
 
-  it('falls back to direct base64 decoding when fetch rejects data URI', async () => {
+  it('decodes base64 data URI locally without calling fetch even when fetch would fail', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:application/octet-stream;base64,${base64}`;
@@ -666,7 +662,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
     } finally {
@@ -674,7 +670,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('keeps original fetch error context when fallback base64 decoding also fails', async () => {
+  it('uses fetch as last resort and preserves fetch error when atob fails and fetch also fails', async () => {
     const { json } = triangleAsset();
     const uri = 'data:application/octet-stream;base64,@@@';
     json.buffers = [{ uri, byteLength: 1 }];
@@ -684,7 +680,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       await expect(loadGltf(buffer)).rejects.toMatchObject({
-        message: expect.stringContaining('Initial fetch failure: CSP blocked data URI'),
+        message: expect.stringContaining('CSP blocked data URI'),
         cause: expect.objectContaining({ message: 'CSP blocked data URI' }),
       });
     } finally {
@@ -712,7 +708,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('attaches fetch status as cause when fetch returns non-OK and base64 decoding also fails', async () => {
+  it('uses fetch as last resort and preserves fetch status when atob fails and fetch returns non-OK', async () => {
     const { json } = triangleAsset();
     const uri = 'data:application/octet-stream;base64,@@@';
     json.buffers = [{ uri, byteLength: 1 }];
@@ -725,7 +721,7 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       await expect(loadGltf(buffer)).rejects.toMatchObject({
-        message: expect.stringContaining('Initial fetch failure: status 403'),
+        message: expect.stringContaining('status 403'),
         cause: expect.objectContaining({ message: 'status 403' }),
       });
     } finally {
@@ -733,22 +729,18 @@ describe('loadGltf', () => {
     }
   });
 
-  it('decodes data URI buffer without MIME type (data:;base64,...)', async () => {
+  it('decodes data URI without MIME type (data:;base64,...) locally without calling fetch', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      status: 200,
-      arrayBuffer: vi.fn().mockResolvedValue(bin),
-    } as unknown as Response);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
     } finally {
@@ -756,7 +748,7 @@ describe('loadGltf', () => {
     }
   });
 
-  it('falls back to direct base64 decoding for data URI without MIME type when fetch fails', async () => {
+  it('decodes data URI without MIME type (data:;base64,...) locally without calling fetch even when fetch would fail', async () => {
     const { json, bin } = triangleAsset();
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     const uri = `data:;base64,${base64}`;
@@ -767,9 +759,28 @@ describe('loadGltf', () => {
     try {
       const buffer = jsonToBuffer(json);
       const result = await loadGltf(buffer);
-      expect(fetchSpy).toHaveBeenCalledWith(uri);
+      expect(fetchSpy).not.toHaveBeenCalled();
       expect(result.meshes).toHaveLength(1);
       expect(Array.from(result.meshes[0].indices)).toEqual([0, 1, 2]);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('does not call fetch for standard data:...;base64,... URIs', async () => {
+    // Regression guard: fetch must NOT be called for base64 data URIs to prevent
+    // binary buffer contents from being exposed to Service Workers.
+    const { json, bin } = triangleAsset();
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${base64}`, byteLength: bin.byteLength }];
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
+
+    try {
+      const buffer = jsonToBuffer(json);
+      const result = await loadGltf(buffer);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.meshes).toHaveLength(1);
     } finally {
       fetchSpy.mockRestore();
     }
@@ -1676,9 +1687,9 @@ describe('loadGltf', () => {
   });
 
   it('preserves fetch error cause chain from resolveBuffers without re-wrapping', async () => {
-    // Use invalid base64 so decodeDataUri's atob fallback also fails, forcing the
-    // error path that attaches the original fetch failure as `cause`. The fetch is
-    // mocked to return a non-OK 403 response, which is what decodeDataUri stores.
+    // Use invalid base64 so decodeDataUri's local atob decoding fails, triggering
+    // the fetch fallback.  The fetch is mocked to return a non-OK 403 response,
+    // which decodeDataUri attaches as `cause` on the thrown error.
     const { json, bin } = triangleAsset();
     const uri = `data:application/octet-stream;base64,@@@invalid`; // invalid base64 → atob fallback throws
     json.buffers = [{ uri, byteLength: bin.byteLength }];

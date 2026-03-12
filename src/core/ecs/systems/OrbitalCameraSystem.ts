@@ -64,6 +64,7 @@ export class OrbitalCameraSystem extends System {
   // ---- Internal state -------------------------------------------------------
 
   private canvas: HTMLCanvasElement | null = null;
+  private windowListenersAttached = false;
   private dragging = false;
   private lastX = 0;
   private lastY = 0;
@@ -105,15 +106,18 @@ export class OrbitalCameraSystem extends System {
     this.canvas = canvas;
     canvas.addEventListener('mousedown', this.onMouseDown);
     canvas.addEventListener('mousemove', this.onMouseMove);
-    window.addEventListener('mouseup', this.onMouseUp);
     canvas.addEventListener('touchstart', this.onTouchStart, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener(
       'touchmove',
       this.onTouchMove,
       OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
     );
-    window.addEventListener('touchend', this.onTouchEnd, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
     canvas.addEventListener('wheel', this.onWheel, OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mouseup', this.onMouseUp);
+      window.addEventListener('touchend', this.onTouchEnd, OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS);
+      this.windowListenersAttached = true;
+    }
   }
 
   /**
@@ -122,31 +126,35 @@ export class OrbitalCameraSystem extends System {
    * or after a previous {@link detach} call (no-op in both cases).
    */
   detach(): void {
-    if (!this.canvas) return;
-    this.canvas.removeEventListener('mousedown', this.onMouseDown);
-    this.canvas.removeEventListener('mousemove', this.onMouseMove);
-    window.removeEventListener('mouseup', this.onMouseUp);
-    this.canvas.removeEventListener(
-      'touchstart',
-      this.onTouchStart,
-      OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
-    );
-    this.canvas.removeEventListener(
-      'touchmove',
-      this.onTouchMove,
-      OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
-    );
-    window.removeEventListener(
-      'touchend',
-      this.onTouchEnd,
-      OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
-    );
-    this.canvas.removeEventListener(
-      'wheel',
-      this.onWheel,
-      OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
-    );
-    this.canvas = null;
+    if (this.canvas) {
+      this.canvas.removeEventListener('mousedown', this.onMouseDown);
+      this.canvas.removeEventListener('mousemove', this.onMouseMove);
+      this.canvas.removeEventListener(
+        'touchstart',
+        this.onTouchStart,
+        OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
+      );
+      this.canvas.removeEventListener(
+        'touchmove',
+        this.onTouchMove,
+        OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
+      );
+      this.canvas.removeEventListener(
+        'wheel',
+        this.onWheel,
+        OrbitalCameraSystem.NON_PASSIVE_EVENT_OPTIONS,
+      );
+      this.canvas = null;
+    }
+    if (this.windowListenersAttached) {
+      window.removeEventListener('mouseup', this.onMouseUp);
+      window.removeEventListener(
+        'touchend',
+        this.onTouchEnd,
+        OrbitalCameraSystem.PASSIVE_EVENT_OPTIONS,
+      );
+      this.windowListenersAttached = false;
+    }
   }
 
   // ---------------------------------------------------------------------------

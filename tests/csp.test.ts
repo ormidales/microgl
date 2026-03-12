@@ -23,24 +23,30 @@ describe('Content-Security-Policy', () => {
   it('disallows unsafe-eval in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
-      expect(csp).not.toContain("'unsafe-eval'");
+      const csp = extractCspContent(html);
+      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
+      const cspValue = csp as string;
+      expect(cspValue).not.toContain("'unsafe-eval'");
     }
   });
 
   it('restricts object-src to none in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
-      expect(csp).toContain("object-src 'none'");
+      const csp = extractCspContent(html);
+      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
+      const cspValue = csp as string;
+      expect(cspValue).toContain("object-src 'none'");
     }
   });
 
   it('restricts base-uri to self in every CSP', () => {
     for (const path of pagePaths) {
       const html = readFileSync(new URL(path, import.meta.url), 'utf8');
-      const csp = extractCspContent(html)!;
-      expect(csp).toContain("base-uri 'self'");
+      const csp = extractCspContent(html);
+      expect(csp, `${path} must have a CSP meta tag`).not.toBeNull();
+      const cspValue = csp as string;
+      expect(cspValue).toContain("base-uri 'self'");
     }
   });
 });

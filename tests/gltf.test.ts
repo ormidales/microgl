@@ -818,6 +818,95 @@ describe('loadGltf', () => {
     expect((err as Error).message).toMatch(/already been consumed/);
   });
 
+  // ---------------------------------------------------------------------------
+  // Buffer byteLength integrity checks
+  // ---------------------------------------------------------------------------
+
+  it('throws when a GLB binary chunk is shorter than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    // Declare a byteLength larger than the actual binary chunk
+    json.buffers = [{ byteLength: bin.byteLength + 100 }];
+
+    const glb = buildGlb(json, bin);
+    const err = await loadGltf(glb).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(new RegExp(String(bin.byteLength)));
+    expect((err as Error).message).toMatch(new RegExp(String(bin.byteLength + 100)));
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts a GLB binary chunk larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    // Declare a byteLength smaller than the actual binary chunk — this is valid
+    json.buffers = [{ byteLength: bin.byteLength }];
+    const paddedBin = new ArrayBuffer(bin.byteLength + 16);
+    new Uint8Array(paddedBin).set(new Uint8Array(bin));
+
+    const glb = buildGlb(json, paddedBin);
+    // Should load without error; downstream accessors only read up to byteLength
+    await expect(loadGltf(glb)).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when a data-URI buffer is shorter than declared byteLength', async () => {
+    const { json } = triangleAsset();
+    // Build a tiny 4-byte buffer but declare 1000 bytes
+    const tiny = new Uint8Array([1, 2, 3, 4]);
+    const b64 = btoa(String.fromCharCode(...tiny));
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: 1000 }];
+
+    const buffer = jsonToBuffer(json);
+    const err = await loadGltf(buffer).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/4/);
+    expect((err as Error).message).toMatch(/1000/);
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts a data-URI buffer larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    const bytes = new Uint8Array(bin);
+    const b64 = btoa(String.fromCharCode(...bytes));
+    // Declare fewer bytes than the data URI actually contains
+    json.buffers = [{ uri: `data:application/octet-stream;base64,${b64}`, byteLength: 1 }];
+
+    const buffer = jsonToBuffer(json);
+    // Should not throw — extra bytes are ignored by downstream accessors
+    await expect(loadGltf(buffer)).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
+  it('throws when an external URI buffer is shorter than declared byteLength', async () => {
+    const { json } = triangleAsset();
+    json.buffers = [{ uri: 'small.bin', byteLength: 1000 }];
+
+    const buffer = jsonToBuffer(json);
+    const smallBin = new ArrayBuffer(4);
+    const resolveUri = async (_uri: string) => smallBin;
+
+    const err = await loadGltf(buffer, { resolveUri }).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/Buffer 0/);
+    expect((err as Error).message).toMatch(/4/);
+    expect((err as Error).message).toMatch(/1000/);
+    expect((err as Error).message).toMatch(/corrupt or truncated/);
+  });
+
+  it('accepts an external URI buffer larger than declared byteLength', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: 'triangle.bin', byteLength: bin.byteLength }];
+    const largerBin = new ArrayBuffer(bin.byteLength + 64);
+    new Uint8Array(largerBin).set(new Uint8Array(bin));
+
+    const buffer = jsonToBuffer(json);
+    const resolveUri = async (_uri: string) => largerBin;
+
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+  });
+
   it('resolves external buffer URIs via callback', async () => {
     const { json, bin } = triangleAsset();
     json.buffers = [{ uri: 'triangle.bin', byteLength: bin.byteLength }];

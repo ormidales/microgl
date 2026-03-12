@@ -346,6 +346,15 @@ async function resolveBuffers(
   const gltfBuffers = json.buffers ?? [];
   const resolved: ArrayBuffer[] = [];
 
+  const assertByteLength = (buf: ArrayBuffer, declaredByteLength: number, index: number) => {
+    if (buf.byteLength < declaredByteLength) {
+      throw new Error(
+        `Buffer ${index}: resolved data is ${buf.byteLength} bytes, ` +
+        `but the glTF asset declares ${declaredByteLength} bytes. The asset may be corrupt or truncated.`,
+      );
+    }
+  };
+
   let binChunkConsumed = false;
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
@@ -361,10 +370,13 @@ async function resolveBuffers(
           `GLB only supports one embedded binary buffer.`,
         );
       }
+      assertByteLength(binChunk, buf.byteLength, i);
       resolved.push(binChunk);
       binChunkConsumed = true;
     } else if (buf.uri.startsWith('data:')) {
-      resolved.push(await decodeDataUri(buf.uri));
+      const dataUriBuffer = await decodeDataUri(buf.uri);
+      assertByteLength(dataUriBuffer, buf.byteLength, i);
+      resolved.push(dataUriBuffer);
     } else {
       if (!resolveUri) {
         throw new Error(
@@ -372,7 +384,9 @@ async function resolveBuffers(
         );
       }
       validateExternalUri(buf.uri, i, options?.strict);
-      resolved.push(await resolveUri(buf.uri));
+      const externalBuffer = await resolveUri(buf.uri);
+      assertByteLength(externalBuffer, buf.byteLength, i);
+      resolved.push(externalBuffer);
     }
   }
 

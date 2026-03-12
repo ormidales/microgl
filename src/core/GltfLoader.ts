@@ -395,6 +395,7 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
   const header = uri.slice(0, commaIndex).toLowerCase();
 
   // Fast path: decode base64 locally, avoiding the fetch/Service Worker pipeline.
+  let atobFailure: Error | undefined;
   if (header.includes(';base64')) {
     try {
       const binary = atob(uri.slice(commaIndex + 1));
@@ -403,8 +404,9 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
         bytes[i] = binary.charCodeAt(i);
       }
       return bytes.buffer;
-    } catch {
+    } catch (err) {
       // Fall through to fetch as a last resort when atob fails.
+      atobFailure = err instanceof Error ? err : new Error('invalid base64 payload');
     }
   }
 
@@ -426,8 +428,9 @@ async function decodeDataUri(uri: string): Promise<ArrayBuffer> {
     throw error;
   }
 
-  // base64 URI where atob failed and fetch also failed.
-  const error = new Error(`Failed to decode base64 data URI via fallback: ${fetchFailure?.message ?? 'unknown error'}.`);
+  // base64 URI where atob failed and fetch also failed — include both failure reasons.
+  const atobMessage = atobFailure ? ` Local decode failure: ${atobFailure.message}.` : '';
+  const error = new Error(`Failed to decode base64 data URI via fallback: ${fetchFailure?.message ?? 'unknown error'}.${atobMessage}`);
   if (fetchFailure) (error as Error & { cause?: Error }).cause = fetchFailure;
   throw error;
 }

@@ -639,7 +639,7 @@ describe('loadGltf', () => {
     const uri = `data:application/octet-stream;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
@@ -735,7 +735,7 @@ describe('loadGltf', () => {
     const uri = `data:;base64,${base64}`;
     json.buffers = [{ uri, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);
@@ -774,7 +774,7 @@ describe('loadGltf', () => {
     const base64 = btoa(String.fromCharCode(...new Uint8Array(bin)));
     json.buffers = [{ uri: `data:application/octet-stream;base64,${base64}`, byteLength: bin.byteLength }];
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch must not be called for base64 data URIs'));
 
     try {
       const buffer = jsonToBuffer(json);

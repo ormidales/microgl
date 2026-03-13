@@ -35,8 +35,12 @@ script-src 'sha256-NDWEjzGVmgdl6gIijt3W2YpACKUzjdbNjuRCLQIRDKo=' 'strict-dynamic
 
 `'strict-dynamic'` propagates the trust granted by the hash to any modules
 dynamically imported by that script (i.e. the rest of the application bundle).
-Older browsers that do not understand `'strict-dynamic'` ignore it and fall back
-to the hash alone.
+**`demo.html` requires `'strict-dynamic'` support to function correctly.**
+Without it, the browser will allow the inline bootstrap script (whose hash
+matches) but block its `import '/src/main.ts'` call, because no host source
+such as `'self'` is present to authorize the external module load.  All browsers
+that support WebGL 2.0 also support `'strict-dynamic'` (Chrome 52+, Firefox 52+,
+Safari 15.4+), so this is not a practical limitation for this project.
 
 #### Recomputing the hash
 

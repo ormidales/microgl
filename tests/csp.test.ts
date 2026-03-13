@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -64,5 +65,22 @@ describe('Content-Security-Policy', () => {
         ).toBe(true);
       }
     }
+  });
+
+  it('CSP hash in demo.html matches the actual inline bootstrap script content', () => {
+    const demoPath = new URL('../demo.html', import.meta.url);
+    const html = readFileSync(demoPath, 'utf8');
+    const csp = extractCspContent(html);
+    if (csp === null) throw new Error('demo.html must have a CSP meta tag');
+
+    const scriptMatch = html.match(/<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/);
+    expect(scriptMatch, 'demo.html must contain an inline <script type="module"> element').not.toBeNull();
+    const scriptContent = scriptMatch![1];
+
+    const expectedHash = createHash('sha256').update(scriptContent, 'utf8').digest('base64');
+    expect(
+      csp,
+      `demo.html CSP hash is stale — recompute with: printf "<content>" | openssl dgst -sha256 -binary | base64`,
+    ).toContain(`'sha256-${expectedHash}'`);
   });
 });

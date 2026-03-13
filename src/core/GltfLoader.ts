@@ -140,7 +140,11 @@ export interface GltfLoaderOptions {
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
-   * Maximum accepted byte size for a plain JSON glTF payload.
+   * Maximum accepted size for a plain JSON glTF payload, enforced on both the
+   * raw `ArrayBuffer` byte length **and** the decoded UTF-8 string character
+   * count before `JSON.parse` is called. Applying the limit to the decoded
+   * string prevents a maliciously crafted payload from exhausting the JS heap
+   * inside `JSON.parse` even if the byte-length guard were somehow bypassed.
    * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
    */
   maxJsonBufferBytes?: number;
@@ -257,6 +261,12 @@ export function parseContainer(
     );
   }
   const text = UTF8_DECODER.decode(buffer);
+  if (text.length > maxJsonBufferBytes) {
+    throw new Error(
+      `JSON glTF payload too large (${text.length} characters). ` +
+      `Maximum supported size is ${maxJsonBufferBytes} characters.`,
+    );
+  }
   const json = safeParseGltfJson(text);
   return { json, binChunk: undefined };
 }

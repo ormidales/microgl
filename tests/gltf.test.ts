@@ -173,6 +173,25 @@ describe('parseContainer', () => {
     expect(() => parseContainer(oversized)).toThrow(/payload too large/);
   });
 
+  it('rejects decoded JSON string exceeding maxJsonBufferBytes before JSON.parse is called', () => {
+    const json = JSON.stringify(minimalGltf());
+    const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
+    const parseSpy = vi.spyOn(JSON, 'parse');
+    try {
+      // maxJsonBufferBytes set to one less than the payload length — both the
+      // buffer-byte check and the decoded-string check should fire before
+      // JSON.parse is reached.
+      parseContainer(buf, { maxJsonBufferBytes: json.length - 1 });
+    } catch {
+      // expected to throw
+    }
+    expect(parseSpy).not.toHaveBeenCalled();
+    parseSpy.mockRestore();
+
+    // At the exact payload length the parse should succeed.
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length })).not.toThrow();
+  });
+
   it('parses GLB container with JSON + BIN chunks', () => {
     const { json: srcJson, bin } = triangleAsset();
     const glb = buildGlb(srcJson, bin);

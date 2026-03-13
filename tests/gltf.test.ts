@@ -178,15 +178,18 @@ describe('parseContainer', () => {
     const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
     const parseSpy = vi.spyOn(JSON, 'parse');
     try {
-      // maxJsonBufferBytes set to one less than the payload length — both the
-      // buffer-byte check and the decoded-string check should fire before
-      // JSON.parse is reached.
-      parseContainer(buf, { maxJsonBufferBytes: json.length - 1 });
-    } catch {
-      // expected to throw
+      try {
+        // maxJsonBufferBytes set to one less than the payload length — both the
+        // buffer-byte check and the decoded-string check should fire before
+        // JSON.parse is reached.
+        parseContainer(buf, { maxJsonBufferBytes: json.length - 1 });
+      } catch {
+        // expected to throw
+      }
+      expect(parseSpy).not.toHaveBeenCalled();
+    } finally {
+      parseSpy.mockRestore();
     }
-    expect(parseSpy).not.toHaveBeenCalled();
-    parseSpy.mockRestore();
 
     // At the exact payload length the parse should succeed.
     expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length })).not.toThrow();

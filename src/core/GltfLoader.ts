@@ -35,7 +35,7 @@ const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
-/** Maximum URI length accepted in strict mode (guards against catastrophic backtracking). */
+/** Maximum URI length accepted in strict mode (guards against excessively long URIs that could cause resource exhaustion). */
 const MAX_URI_LENGTH = 2048;
 
 /**
@@ -392,8 +392,9 @@ function validateExternalUri(uri: string, bufferIndex: number, strict?: boolean)
 
   if (strict) {
     if (candidates.some((v) => v.length > MAX_URI_LENGTH)) {
+      const len = Math.max(...candidates.map((v) => v.length));
       throw new Error(
-        `Buffer ${bufferIndex}: URI exceeds maximum allowed length in strict mode.`,
+        `Buffer ${bufferIndex}: URI exceeds maximum allowed length in strict mode (len=${len}, max=${MAX_URI_LENGTH}).`,
       );
     }
     if (!candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {

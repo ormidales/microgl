@@ -262,10 +262,11 @@ export function parseContainer(
     );
   }
   const text = UTF8_DECODER.decode(buffer);
-  if (text.length > maxJsonBufferBytes) {
+  // Approximate heap usage of the decoded UTF-16 string (2 bytes per code unit)
+  if (text.length * 2 > maxJsonBufferBytes) {
     throw new Error(
-      `JSON glTF payload too large (${text.length} characters). ` +
-      `Maximum supported size is ${maxJsonBufferBytes} characters.`,
+      `JSON glTF string too large (~${text.length * 2} UTF-16 bytes). ` +
+      `Maximum supported decoded size is ${maxJsonBufferBytes} bytes.`,
     );
   }
   const json = safeParseGltfJson(text);

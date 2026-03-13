@@ -66,10 +66,14 @@ export class ShaderCache {
 
   /**
    * Compute a compact, fixed-length cache key for a single GLSL source string
-   * using FNV-1a so the raw source is never stored as a Map key.
+   * using a composite of two independent 32-bit FNV-1a hashes so the raw
+   * source is never stored as a Map key while achieving ~64-bit effective
+   * collision resistance.
    */
   private static hashShaderSource(source: string): string {
-    return `fnv1a-shader-${ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS)}`;
+    const primary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS);
+    const secondary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS_2);
+    return `fnv1a-shader-${primary}-${secondary}`;
   }
 
   /** key → compiled WebGLShader */

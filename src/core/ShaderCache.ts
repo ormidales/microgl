@@ -79,6 +79,19 @@ export class ShaderCache {
     return `fnv1a-shader-${primary}-${secondary}`;
   }
 
+  /**
+   * Throws a {@link RangeError} if `key` is defined and exceeds
+   * {@link MAX_KEY_LENGTH}. Call this at the top of every public method that
+   * accepts an optional explicit key.
+   */
+  private static assertKeyLength(key: string | undefined): void {
+    if (key !== undefined && key.length > ShaderCache.MAX_KEY_LENGTH) {
+      throw new RangeError(
+        `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
+      );
+    }
+  }
+
   /** key → compiled WebGLShader */
   private readonly shaders: Map<string, WebGLShader> = new Map();
 
@@ -111,11 +124,7 @@ export class ShaderCache {
    * @param key Optional cache key. Defaults to an FNV-1a hash of the source string.
    */
   getShader(type: number, source: string, key?: string): WebGLShader {
-    if (key !== undefined && key.length > ShaderCache.MAX_KEY_LENGTH) {
-      throw new RangeError(
-        `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
-      );
-    }
+    ShaderCache.assertKeyLength(key);
     const cacheKey = key ?? ShaderCache.hashShaderSource(source);
     const existing = this.shaders.get(cacheKey);
     if (existing) return existing;
@@ -136,11 +145,7 @@ export class ShaderCache {
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
     // Explicit-key path: bypass auto-hashing entirely.
     if (key !== undefined) {
-      if (key.length > ShaderCache.MAX_KEY_LENGTH) {
-        throw new RangeError(
-          `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
-        );
-      }
+      ShaderCache.assertKeyLength(key);
       const existing = this.programs.get(key);
       if (existing !== undefined) return existing;
       return this.compileAndCache(vertexSource, fragmentSource, key, undefined);
@@ -259,11 +264,7 @@ export class ShaderCache {
    */
   getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
     if (key !== undefined) {
-      if (key.length > ShaderCache.MAX_KEY_LENGTH) {
-        throw new RangeError(
-          `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
-        );
-      }
+      ShaderCache.assertKeyLength(key);
       return key;
     }
     const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);

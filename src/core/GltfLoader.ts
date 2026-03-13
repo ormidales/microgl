@@ -142,21 +142,26 @@ export interface GltfLoaderOptions {
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
-   * Maximum accepted size (in bytes) for a plain JSON glTF payload. This limit is
-   * enforced at two points:
-   *
-   * 1. On the raw `ArrayBuffer` byte length before decoding.
-   * 2. On the approximate in-memory UTF-16 footprint of the decoded string
-   *    (`text.length * 2`) before `JSON.parse` is called.
-   *
-   * Because a JavaScript string stores each code unit as two bytes (UTF-16), a
-   * 27-byte ASCII JSON payload produces a string whose heap footprint is
-   * approximately 54 bytes. Callers should set this limit to at least twice the
-   * expected source byte size when dealing with predominantly ASCII content.
+   * Maximum accepted raw byte length for a JSON glTF payload (plain `.gltf`) or
+   * the JSON chunk of a GLB file, checked before UTF-8 decoding.
    *
    * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
    */
   maxJsonBufferBytes?: number;
+  /**
+   * Maximum accepted approximate in-memory UTF-16 heap footprint of the decoded
+   * JSON string (`text.length * 2`), checked before `JSON.parse` is called.
+   * Enforced for both plain `.gltf` payloads and the JSON chunk of GLB files.
+   *
+   * Because a JavaScript string stores each code unit as two bytes (UTF-16), a
+   * 64 MiB ASCII JSON buffer decodes to a string with a ~128 MiB heap footprint.
+   * Setting this separately from `maxJsonBufferBytes` lets callers tune raw-byte
+   * and heap-footprint limits independently.
+   *
+   * Defaults to twice `maxJsonBufferBytes` (128 MiB). Raise this value only when
+   * loading unusually large assets.
+   */
+  maxJsonStringBytes?: number;
   /**
    * When `true`, each VEC3 normal vector is re-normalized to unit length after
    * loading. Useful when the source asset was exported with non-unit normals.
@@ -250,16 +255,17 @@ function wrapGltfError(prefix: string, cause: unknown): Error {
  */
 export function parseContainer(
   buffer: ArrayBuffer,
-  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes'>,
+  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes' | 'maxJsonStringBytes'>,
 ): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
 } {
   const header = new DataView(buffer);
   const maxJsonBufferBytes = options?.maxJsonBufferBytes ?? MAX_JSON_BUFFER_BYTES;
+  const maxJsonStringBytes = options?.maxJsonStringBytes ?? maxJsonBufferBytes * 2;
 
   if (buffer.byteLength >= 12 && header.getUint32(0, true) === GLB_MAGIC) {
-    return parseGlb(buffer);
+    return parseGlb(buffer, maxJsonBufferBytes, maxJsonStringBytes);
   }
 
   // Treat the whole buffer as UTF-8 JSON
@@ -271,10 +277,10 @@ export function parseContainer(
   }
   const text = UTF8_DECODER.decode(buffer);
   // Approximate heap usage of the decoded UTF-16 string (2 bytes per code unit)
-  if (text.length * 2 > maxJsonBufferBytes) {
+  if (text.length * 2 > maxJsonStringBytes) {
     throw new Error(
       `JSON glTF string too large (~${text.length * 2} UTF-16 bytes). ` +
-      `Maximum supported decoded size is ${maxJsonBufferBytes} bytes.`,
+      `Maximum supported decoded size is ${maxJsonStringBytes} bytes.`,
     );
   }
   const json = safeParseGltfJson(text);
@@ -284,7 +290,11 @@ export function parseContainer(
 /**
  * Parse a GLB (binary glTF) container according to the glTF 2.0 spec §5.
  */
-function parseGlb(buffer: ArrayBuffer): {
+function parseGlb(
+  buffer: ArrayBuffer,
+  maxJsonBufferBytes: number,
+  maxJsonStringBytes: number,
+): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
 } {
@@ -308,7 +318,19 @@ function parseGlb(buffer: ArrayBuffer): {
     const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLength);
 
     if (chunkType === GLB_CHUNK_JSON) {
+      if (chunkData.byteLength > maxJsonBufferBytes) {
+        throw new Error(
+          `GLB JSON chunk too large (${chunkData.byteLength} bytes). ` +
+          `Maximum supported size is ${maxJsonBufferBytes} bytes.`,
+        );
+      }
       const text = UTF8_DECODER.decode(chunkData);
+      if (text.length * 2 > maxJsonStringBytes) {
+        throw new Error(
+          `GLB JSON chunk string too large (~${text.length * 2} UTF-16 bytes). ` +
+          `Maximum supported decoded size is ${maxJsonStringBytes} bytes.`,
+        );
+      }
       json = safeParseGltfJson(text);
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;

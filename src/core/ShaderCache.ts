@@ -64,6 +64,18 @@ export class ShaderCache {
     return `fnv1a2-${ShaderCache.fnv1aSources(vertSrc, fragSrc, ShaderCache.FNV1A_OFFSET_BASIS_2)}`;
   }
 
+  /**
+   * Compute a compact, fixed-length cache key for a single GLSL source string
+   * using a composite of two independent 32-bit FNV-1a hashes so the raw
+   * source is never stored as a Map key while achieving ~64-bit effective
+   * collision resistance.
+   */
+  private static hashShaderSource(source: string): string {
+    const primary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS);
+    const secondary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS_2);
+    return `fnv1a-shader-${primary}-${secondary}`;
+  }
+
   /** key → compiled WebGLShader */
   private readonly shaders: Map<string, WebGLShader> = new Map();
 
@@ -93,10 +105,10 @@ export class ShaderCache {
    *
    * @param type `gl.VERTEX_SHADER` or `gl.FRAGMENT_SHADER`
    * @param source GLSL source code
-   * @param key Optional cache key. Defaults to the source string itself.
+   * @param key Optional cache key. Defaults to an FNV-1a hash of the source string.
    */
   getShader(type: number, source: string, key?: string): WebGLShader {
-    const cacheKey = key ?? source;
+    const cacheKey = key ?? ShaderCache.hashShaderSource(source);
     const existing = this.shaders.get(cacheKey);
     if (existing) return existing;
 
@@ -171,8 +183,8 @@ export class ShaderCache {
     cacheKey: string,
     secondaryKey: string | undefined,
   ): WebGLProgram {
-    const vertexShaderKey = vertexSource;
-    const fragmentShaderKey = fragmentSource;
+    const vertexShaderKey = ShaderCache.hashShaderSource(vertexSource);
+    const fragmentShaderKey = ShaderCache.hashShaderSource(fragmentSource);
     const vsPreExisted = this.shaders.has(vertexShaderKey);
     const fsPreExisted = this.shaders.has(fragmentShaderKey);
     let vs: WebGLShader;

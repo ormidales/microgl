@@ -214,6 +214,27 @@ describe('ShaderCache', () => {
     expect(gl.createShader).toHaveBeenCalledTimes(1);
   });
 
+  it('uses a hash string, not the raw source, as the default shader cache key', () => {
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    // First call without an explicit key caches under a hash-derived key.
+    const s1 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}');
+
+    // A second call with the same source returns the cached shader (hash hit).
+    const s2 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}');
+    expect(s1).toBe(s2);
+    expect(gl.createShader).toHaveBeenCalledTimes(1);
+
+    // Passing the raw source string as an explicit key is a different slot:
+    // the hash key !== the source string, so a new shader is compiled.
+    const s3 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}', 'void main(){}');
+    expect(s3).not.toBe(s1);
+    expect(gl.createShader).toHaveBeenCalledTimes(2);
+  });
+
   it('supports a custom cache key for getProgram', () => {
     const p1 = cache.getProgram('v', 'f', 'prog-key');
     const p2 = cache.getProgram('v', 'f', 'prog-key');

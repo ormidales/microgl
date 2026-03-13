@@ -407,6 +407,40 @@ async function resolveBuffers(
     }
   };
 
+  /**
+   * Fully percent-decode a URI in a bounded loop.
+   *
+   * This prevents double-encoded traversal/scheme payloads from slipping
+   * through validation when consumers perform an additional decode.
+   *
+   * If further decoding would fail (malformed escape sequences), the last
+   * successfully decoded value is used. After the loop, if the string still
+   * contains percent-encoded bytes, the URI is rejected as suspicious.
+   */
+  const fullyDecodeUri = (uri: string, maxIterations = 5): string => {
+    let current = uri;
+    for (let i = 0; i < maxIterations; i++) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(current);
+      } catch {
+        // Stop decoding on failure and use the last valid value.
+        break;
+      }
+      if (decoded === current) {
+        break;
+      }
+      current = decoded;
+    }
+    // If there are still percent-encoded octets present, treat as suspicious.
+    if (/%[0-9a-fA-F]{2}/.test(current)) {
+      throw new Error(
+        `Rejected suspicious percent-encoded URI after decoding: ${JSON.stringify(current)}`,
+      );
+    }
+    return current;
+  };
+
   let binChunkConsumed = false;
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
@@ -442,14 +476,15 @@ async function resolveBuffers(
             `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
           );
         }
+        // Validate the original URI as authored in the glTF asset.
         validateExternalUri(buf.uri, i, options?.strict);
-        // Pass the percent-decoded URI to the callback so consumers never receive
-        // a raw percent-encoded string that could be re-decoded to a dangerous path.
-        // The fallback to the original URI on decode failure is safe because
-        // validateExternalUri has already checked both raw and decoded forms.
-        let safeUri: string;
-        try { safeUri = decodeURIComponent(buf.uri); } catch { safeUri = buf.uri; }
-        const externalBuffer = await resolveUri(safeUri);
+        // Fully percent-decode the URI in a bounded loop so that any traversal
+        // or scheme payload only expressed after multiple decodes is exposed.
+        const fullyDecodedUri = fullyDecodeUri(buf.uri);
+        // Validate the fully decoded form as well, since this is what will be
+        // passed to the resolveUri callback and potentially used by consumers.
+        validateExternalUri(fullyDecodedUri, i, options?.strict);
+        const externalBuffer = await resolveUri(fullyDecodedUri);
         assertByteLength(externalBuffer, buf.byteLength, i);
         resolved.push(externalBuffer);
       }

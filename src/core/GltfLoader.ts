@@ -35,6 +35,8 @@ const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
+/** Maximum URI length accepted in strict mode (guards against excessively long URIs that could cause resource exhaustion). */
+const MAX_URI_LENGTH = 2048;
 
 /**
  * Deep-clone arbitrary JSON-like data into "data-only" structures:
@@ -126,15 +128,40 @@ function safeParseGltfJson(text: string): GltfAsset {
 export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
-   * Receives the raw URI string and must return the corresponding binary data.
+   * Receives a URI string that the loader has attempted to percent-decode and must
+   * return the corresponding binary data. If the URI contains invalid percent-encoding,
+   * decoding may fail and the original (possibly still percent-encoded) URI string
+   * will be passed to this callback.
    * Required when loading plain `.gltf` files that reference external `.bin` files.
+   *
+   * **Security warning**: the URI received by this callback has already been validated
+   * and normalization / percent-decoding have been applied on a best-effort basis by
+   * the loader. Do not perform additional URI resolution or decoding inside this
+   * callback — doing so may re-introduce path-traversal or SSRF vulnerabilities that
+   * the loader's validation was designed to prevent.
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
-   * Maximum accepted byte size for a plain JSON glTF payload.
+   * Maximum accepted raw byte length for a JSON glTF payload (plain `.gltf`) or
+   * the JSON chunk of a GLB file, checked before UTF-8 decoding.
+   *
    * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
    */
   maxJsonBufferBytes?: number;
+  /**
+   * Maximum accepted approximate in-memory UTF-16 heap footprint of the decoded
+   * JSON string (`text.length * 2`), checked before `JSON.parse` is called.
+   * Enforced for both plain `.gltf` payloads and the JSON chunk of GLB files.
+   *
+   * Because a JavaScript string stores each code unit as two bytes (UTF-16), a
+   * 64 MiB ASCII JSON buffer decodes to a string with a ~128 MiB heap footprint.
+   * Setting this separately from `maxJsonBufferBytes` lets callers tune raw-byte
+   * and heap-footprint limits independently.
+   *
+   * Defaults to twice `maxJsonBufferBytes` (128 MiB). Raise this value only when
+   * loading unusually large assets.
+   */
+  maxJsonStringBytes?: number;
   /**
    * When `true`, each VEC3 normal vector is re-normalized to unit length after
    * loading. Useful when the source asset was exported with non-unit normals.
@@ -228,16 +255,28 @@ function wrapGltfError(prefix: string, cause: unknown): Error {
  */
 export function parseContainer(
   buffer: ArrayBuffer,
-  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes'>,
+  options?: Pick<GltfLoaderOptions, 'maxJsonBufferBytes' | 'maxJsonStringBytes'>,
 ): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
 } {
   const header = new DataView(buffer);
   const maxJsonBufferBytes = options?.maxJsonBufferBytes ?? MAX_JSON_BUFFER_BYTES;
+  const maxJsonStringBytes = options?.maxJsonStringBytes ?? maxJsonBufferBytes * 2;
+
+  if (!Number.isFinite(maxJsonBufferBytes) || maxJsonBufferBytes < 0) {
+    throw new RangeError(
+      `maxJsonBufferBytes must be a finite non-negative number (got ${maxJsonBufferBytes}).`,
+    );
+  }
+  if (!Number.isFinite(maxJsonStringBytes) || maxJsonStringBytes < 0) {
+    throw new RangeError(
+      `maxJsonStringBytes must be a finite non-negative number (got ${maxJsonStringBytes}).`,
+    );
+  }
 
   if (buffer.byteLength >= 12 && header.getUint32(0, true) === GLB_MAGIC) {
-    return parseGlb(buffer);
+    return parseGlb(buffer, maxJsonBufferBytes, maxJsonStringBytes);
   }
 
   // Treat the whole buffer as UTF-8 JSON
@@ -248,6 +287,13 @@ export function parseContainer(
     );
   }
   const text = UTF8_DECODER.decode(buffer);
+  // Approximate heap usage of the decoded UTF-16 string (2 bytes per code unit)
+  if (text.length * 2 > maxJsonStringBytes) {
+    throw new Error(
+      `JSON glTF string too large (~${text.length * 2} UTF-16 bytes). ` +
+      `Maximum supported decoded size is ${maxJsonStringBytes} bytes.`,
+    );
+  }
   const json = safeParseGltfJson(text);
   return { json, binChunk: undefined };
 }
@@ -255,7 +301,11 @@ export function parseContainer(
 /**
  * Parse a GLB (binary glTF) container according to the glTF 2.0 spec §5.
  */
-function parseGlb(buffer: ArrayBuffer): {
+function parseGlb(
+  buffer: ArrayBuffer,
+  maxJsonBufferBytes: number,
+  maxJsonStringBytes: number,
+): {
   json: GltfAsset;
   binChunk: ArrayBuffer | undefined;
 } {
@@ -275,11 +325,29 @@ function parseGlb(buffer: ArrayBuffer): {
     if (chunkLength === 0) {
       throw new Error(`Invalid chunk length: ${chunkLength}`);
     }
+    if (offset + 8 + chunkLength > buffer.byteLength) {
+      throw new Error(
+        `GLB chunk at offset ${offset} extends beyond end of file ` +
+        `(chunk needs ${offset + 8 + chunkLength} bytes, file is ${buffer.byteLength} bytes).`,
+      );
+    }
     const chunkType = view.getUint32(offset + 4, true);
     const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLength);
 
     if (chunkType === GLB_CHUNK_JSON) {
+      if (chunkData.byteLength > maxJsonBufferBytes) {
+        throw new Error(
+          `GLB JSON chunk too large (${chunkData.byteLength} bytes). ` +
+          `Maximum supported size is ${maxJsonBufferBytes} bytes.`,
+        );
+      }
       const text = UTF8_DECODER.decode(chunkData);
+      if (text.length * 2 > maxJsonStringBytes) {
+        throw new Error(
+          `GLB JSON chunk string too large (~${text.length * 2} UTF-16 bytes). ` +
+          `Maximum supported decoded size is ${maxJsonStringBytes} bytes.`,
+        );
+      }
       json = safeParseGltfJson(text);
     } else if (chunkType === GLB_CHUNK_BIN) {
       binChunk = chunkData;
@@ -361,11 +429,19 @@ function validateExternalUri(uri: string, bufferIndex: number, strict?: boolean)
     );
   }
 
-  if (strict && !candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
-    throw new Error(
-      `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
-      `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
-    );
+  if (strict) {
+    if (candidates.some((v) => v.length > MAX_URI_LENGTH)) {
+      const len = Math.max(...candidates.map((v) => v.length));
+      throw new Error(
+        `Buffer ${bufferIndex}: URI exceeds maximum allowed length in strict mode (len=${len}, max=${MAX_URI_LENGTH}).`,
+      );
+    }
+    if (!candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
+      throw new Error(
+        `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
+        `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
+      );
+    }
   }
 }
 
@@ -396,6 +472,40 @@ async function resolveBuffers(
         `but the glTF asset declares ${declaredByteLength} bytes. The asset may be corrupt or truncated.`,
       );
     }
+  };
+
+  /**
+   * Fully percent-decode a URI in a bounded loop.
+   *
+   * This prevents double-encoded traversal/scheme payloads from slipping
+   * through validation when consumers perform an additional decode.
+   *
+   * If further decoding would fail (malformed escape sequences), the last
+   * successfully decoded value is used. After the loop, if the string still
+   * contains percent-encoded bytes, the URI is rejected as suspicious.
+   */
+  const fullyDecodeUri = (uri: string, maxIterations = 5): string => {
+    let current = uri;
+    for (let i = 0; i < maxIterations; i++) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(current);
+      } catch {
+        // Stop decoding on failure and use the last valid value.
+        break;
+      }
+      if (decoded === current) {
+        break;
+      }
+      current = decoded;
+    }
+    // If there are still percent-encoded octets present, treat as suspicious.
+    if (/%[0-9a-fA-F]{2}/.test(current)) {
+      throw new Error(
+        `Rejected suspicious percent-encoded URI after decoding: ${JSON.stringify(current)}`,
+      );
+    }
+    return current;
   };
 
   let binChunkConsumed = false;
@@ -433,8 +543,15 @@ async function resolveBuffers(
             `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
           );
         }
+        // Validate the original URI as authored in the glTF asset.
         validateExternalUri(buf.uri, i, options?.strict);
-        const externalBuffer = await resolveUri(buf.uri);
+        // Fully percent-decode the URI in a bounded loop so that any traversal
+        // or scheme payload only expressed after multiple decodes is exposed.
+        const fullyDecodedUri = fullyDecodeUri(buf.uri);
+        // Validate the fully decoded form as well, since this is what will be
+        // passed to the resolveUri callback and potentially used by consumers.
+        validateExternalUri(fullyDecodedUri, i, options?.strict);
+        const externalBuffer = await resolveUri(fullyDecodedUri);
         assertByteLength(externalBuffer, buf.byteLength, i);
         resolved.push(externalBuffer);
       }

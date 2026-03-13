@@ -214,6 +214,27 @@ describe('ShaderCache', () => {
     expect(gl.createShader).toHaveBeenCalledTimes(1);
   });
 
+  it('uses a hash string, not the raw source, as the default shader cache key', () => {
+    let shaderId = 0;
+    (gl.createShader as ReturnType<typeof vi.fn>).mockImplementation(
+      () => ({ __shaderId: shaderId++ }) as unknown as WebGLShader,
+    );
+
+    // First call without an explicit key caches under a hash-derived key.
+    const s1 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}');
+
+    // A second call with the same source returns the cached shader (hash hit).
+    const s2 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}');
+    expect(s1).toBe(s2);
+    expect(gl.createShader).toHaveBeenCalledTimes(1);
+
+    // Passing the raw source string as an explicit key is a different slot:
+    // the hash key !== the source string, so a new shader is compiled.
+    const s3 = cache.getShader(gl.VERTEX_SHADER, 'void main(){}', 'void main(){}');
+    expect(s3).not.toBe(s1);
+    expect(gl.createShader).toHaveBeenCalledTimes(2);
+  });
+
   it('supports a custom cache key for getProgram', () => {
     const p1 = cache.getProgram('v', 'f', 'prog-key');
     const p2 = cache.getProgram('v', 'f', 'prog-key');
@@ -633,6 +654,54 @@ describe('ShaderCache', () => {
     expect(gl.createProgram).toHaveBeenCalledTimes(2);
 
     vi.restoreAllMocks();
+  });
+
+  // -------------------------------------------------------------------------
+  // Explicit key length validation
+  // -------------------------------------------------------------------------
+
+  describe('explicit key length validation', () => {
+    const overKey = 'x'.repeat(ShaderCache.MAX_KEY_LENGTH + 1);
+    const exactKey = 'x'.repeat(ShaderCache.MAX_KEY_LENGTH);
+
+    it('getProgram throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getProgram('v', 'f', overKey)).toThrow(RangeError);
+      expect(() => cache.getProgram('v', 'f', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getProgram accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getProgram('v', 'f', exactKey)).not.toThrow();
+    });
+
+    it('getShader throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', overKey)).toThrow(RangeError);
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getShader accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', exactKey)).not.toThrow();
+    });
+
+    it('getProgramKey throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getProgramKey('v', 'f', overKey)).toThrow(RangeError);
+      expect(() => cache.getProgramKey('v', 'f', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getProgramKey accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getProgramKey('v', 'f', exactKey)).not.toThrow();
+    });
+
+    it('getProgram without an explicit key is unaffected by long shader sources', () => {
+      const longSource = 'x'.repeat(10_000);
+      // auto-keyed path hashes the source — must not throw regardless of source length
+      expect(() => cache.getProgram(longSource, longSource)).not.toThrow();
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -6,6 +6,9 @@
 import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
+  /** Maximum allowed length (in characters) for an explicit cache key. */
+  static readonly MAX_KEY_LENGTH = 512;
+
   private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;
   // Second independent seed for the verification hash.  Chosen as the next
   // published 32-bit FNV offset basis candidate so the two hashes are
@@ -64,6 +67,31 @@ export class ShaderCache {
     return `fnv1a2-${ShaderCache.fnv1aSources(vertSrc, fragSrc, ShaderCache.FNV1A_OFFSET_BASIS_2)}`;
   }
 
+  /**
+   * Compute a compact, fixed-length cache key for a single GLSL source string
+   * using a composite of two independent 32-bit FNV-1a hashes so the raw
+   * source is never stored as a Map key while achieving ~64-bit effective
+   * collision resistance.
+   */
+  private static hashShaderSource(source: string): string {
+    const primary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS);
+    const secondary = ShaderCache.fnv1aSources(source, '', ShaderCache.FNV1A_OFFSET_BASIS_2);
+    return `fnv1a-shader-${primary}-${secondary}`;
+  }
+
+  /**
+   * Throws a {@link RangeError} if `key` is defined and exceeds
+   * {@link MAX_KEY_LENGTH}. Call this at the top of every public method that
+   * accepts an optional explicit key.
+   */
+  private static assertKeyLength(key: string | undefined): void {
+    if (key !== undefined && key.length > ShaderCache.MAX_KEY_LENGTH) {
+      throw new RangeError(
+        `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
+      );
+    }
+  }
+
   /** key → compiled WebGLShader */
   private readonly shaders: Map<string, WebGLShader> = new Map();
 
@@ -93,10 +121,11 @@ export class ShaderCache {
    *
    * @param type `gl.VERTEX_SHADER` or `gl.FRAGMENT_SHADER`
    * @param source GLSL source code
-   * @param key Optional cache key. Defaults to the source string itself.
+   * @param key Optional cache key. Defaults to an FNV-1a hash of the source string.
    */
   getShader(type: number, source: string, key?: string): WebGLShader {
-    const cacheKey = key ?? source;
+    ShaderCache.assertKeyLength(key);
+    const cacheKey = key ?? ShaderCache.hashShaderSource(source);
     const existing = this.shaders.get(cacheKey);
     if (existing) return existing;
 
@@ -116,6 +145,7 @@ export class ShaderCache {
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
     // Explicit-key path: bypass auto-hashing entirely.
     if (key !== undefined) {
+      ShaderCache.assertKeyLength(key);
       const existing = this.programs.get(key);
       if (existing !== undefined) return existing;
       return this.compileAndCache(vertexSource, fragmentSource, key, undefined);
@@ -171,8 +201,8 @@ export class ShaderCache {
     cacheKey: string,
     secondaryKey: string | undefined,
   ): WebGLProgram {
-    const vertexShaderKey = vertexSource;
-    const fragmentShaderKey = fragmentSource;
+    const vertexShaderKey = ShaderCache.hashShaderSource(vertexSource);
+    const fragmentShaderKey = ShaderCache.hashShaderSource(fragmentSource);
     const vsPreExisted = this.shaders.has(vertexShaderKey);
     const fsPreExisted = this.shaders.has(fragmentShaderKey);
     let vs: WebGLShader;
@@ -233,7 +263,10 @@ export class ShaderCache {
    *   hash string; for explicitly-keyed programs it is the supplied `key` value.
    */
   getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
-    if (key !== undefined) return key;
+    if (key !== undefined) {
+      ShaderCache.assertKeyLength(key);
+      return key;
+    }
     const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
     const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
     const collisionKey = `${hashKey}:${secondaryKey}`;

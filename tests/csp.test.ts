@@ -46,4 +46,23 @@ describe('Content-Security-Policy', () => {
       expect(csp).toContain("base-uri 'self'");
     }
   });
+
+  it("does not use a bare 'self' in script-src without a complementary nonce or hash", () => {
+    for (const path of pagePaths) {
+      const html = readFileSync(new URL(path, import.meta.url), 'utf8');
+      const csp = extractCspContent(html);
+      if (csp === null) throw new Error(`${path} must have a CSP meta tag`);
+      const scriptSrcMatch = csp.match(/script-src\s+([^;]+)/);
+      if (scriptSrcMatch === null) continue;
+      const scriptSrc = scriptSrcMatch[1];
+      if (scriptSrc.includes("'self'")) {
+        const hasNonce = /'nonce-[^']+'/.test(scriptSrc);
+        const hasHash = /'sha(?:256|384|512)-[^']+'/.test(scriptSrc);
+        expect(
+          hasNonce || hasHash,
+          `${path} uses bare 'self' in script-src without a nonce or hash`,
+        ).toBe(true);
+      }
+    }
+  });
 });

@@ -657,6 +657,54 @@ describe('ShaderCache', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Explicit key length validation
+  // -------------------------------------------------------------------------
+
+  describe('explicit key length validation', () => {
+    const overKey = 'x'.repeat(ShaderCache.MAX_KEY_LENGTH + 1);
+    const exactKey = 'x'.repeat(ShaderCache.MAX_KEY_LENGTH);
+
+    it('getProgram throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getProgram('v', 'f', overKey)).toThrow(RangeError);
+      expect(() => cache.getProgram('v', 'f', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getProgram accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getProgram('v', 'f', exactKey)).not.toThrow();
+    });
+
+    it('getShader throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', overKey)).toThrow(RangeError);
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getShader accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getShader(gl.VERTEX_SHADER, 'void main(){}', exactKey)).not.toThrow();
+    });
+
+    it('getProgramKey throws RangeError when explicit key exceeds MAX_KEY_LENGTH', () => {
+      expect(() => cache.getProgramKey('v', 'f', overKey)).toThrow(RangeError);
+      expect(() => cache.getProgramKey('v', 'f', overKey)).toThrow(
+        /ShaderCache: explicit key exceeds maximum length of \d+ characters\./,
+      );
+    });
+
+    it('getProgramKey accepts an explicit key of exactly MAX_KEY_LENGTH characters', () => {
+      expect(() => cache.getProgramKey('v', 'f', exactKey)).not.toThrow();
+    });
+
+    it('getProgram without an explicit key is unaffected by long shader sources', () => {
+      const longSource = 'x'.repeat(10_000);
+      // auto-keyed path hashes the source — must not throw regardless of source length
+      expect(() => cache.getProgram(longSource, longSource)).not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // FNV-1a hash correctness
   // -------------------------------------------------------------------------
 

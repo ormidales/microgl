@@ -6,6 +6,9 @@
 import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
+  /** Maximum allowed length (in characters) for an explicit cache key. */
+  static readonly MAX_KEY_LENGTH = 512;
+
   private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;
   // Second independent seed for the verification hash.  Chosen as the next
   // published 32-bit FNV offset basis candidate so the two hashes are
@@ -108,6 +111,11 @@ export class ShaderCache {
    * @param key Optional cache key. Defaults to an FNV-1a hash of the source string.
    */
   getShader(type: number, source: string, key?: string): WebGLShader {
+    if (key !== undefined && key.length > ShaderCache.MAX_KEY_LENGTH) {
+      throw new RangeError(
+        `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
+      );
+    }
     const cacheKey = key ?? ShaderCache.hashShaderSource(source);
     const existing = this.shaders.get(cacheKey);
     if (existing) return existing;
@@ -128,6 +136,11 @@ export class ShaderCache {
   getProgram(vertexSource: string, fragmentSource: string, key?: string): WebGLProgram {
     // Explicit-key path: bypass auto-hashing entirely.
     if (key !== undefined) {
+      if (key.length > ShaderCache.MAX_KEY_LENGTH) {
+        throw new RangeError(
+          `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
+        );
+      }
       const existing = this.programs.get(key);
       if (existing !== undefined) return existing;
       return this.compileAndCache(vertexSource, fragmentSource, key, undefined);
@@ -245,7 +258,14 @@ export class ShaderCache {
    *   hash string; for explicitly-keyed programs it is the supplied `key` value.
    */
   getProgramKey(vertexSource: string, fragmentSource: string, key?: string): string {
-    if (key !== undefined) return key;
+    if (key !== undefined) {
+      if (key.length > ShaderCache.MAX_KEY_LENGTH) {
+        throw new RangeError(
+          `ShaderCache: explicit key exceeds maximum length of ${ShaderCache.MAX_KEY_LENGTH} characters.`,
+        );
+      }
+      return key;
+    }
     const hashKey = ShaderCache.hashSources(vertexSource, fragmentSource);
     const secondaryKey = ShaderCache.hashSources2(vertexSource, fragmentSource);
     const collisionKey = `${hashKey}:${secondaryKey}`;

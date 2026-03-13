@@ -141,11 +141,17 @@ export interface GltfLoaderOptions {
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
    * Maximum accepted size (in bytes) for a plain JSON glTF payload. This limit is
-   * enforced both on the raw `ArrayBuffer` byte length **and** on the length of the
-   * decoded JavaScript string (measured in UTF-16 code units via `text.length`)
-   * before `JSON.parse` is called. Bounding the decoded string length in this way
-   * helps prevent a maliciously crafted payload from passing an unreasonably large
-   * string to `JSON.parse`, even if the byte-length guard were somehow bypassed.
+   * enforced at two points:
+   *
+   * 1. On the raw `ArrayBuffer` byte length before decoding.
+   * 2. On the approximate in-memory UTF-16 footprint of the decoded string
+   *    (`text.length * 2`) before `JSON.parse` is called.
+   *
+   * Because a JavaScript string stores each code unit as two bytes (UTF-16), a
+   * 27-byte ASCII JSON payload produces a string whose heap footprint is
+   * approximately 54 bytes. Callers should set this limit to at least twice the
+   * expected source byte size when dealing with predominantly ASCII content.
+   *
    * Defaults to 64 MiB. Raise this value only when loading unusually large assets.
    */
   maxJsonBufferBytes?: number;

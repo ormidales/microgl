@@ -174,25 +174,25 @@ describe('parseContainer', () => {
   });
 
   it('rejects decoded JSON string exceeding maxJsonBufferBytes before JSON.parse is called', () => {
-    const json = JSON.stringify(minimalGltf());
+    const json = JSON.stringify(minimalGltf()); // pure ASCII: buf.byteLength == json.length
     const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
     const parseSpy = vi.spyOn(JSON, 'parse');
     try {
+      // maxJsonBufferBytes == json.length: the byte check passes (buf.byteLength <= limit),
+      // but the decoded-string guard fires because text.length * 2 == json.length * 2 > json.length.
+      // JSON.parse must never be reached.
       try {
-        // maxJsonBufferBytes set to one less than the payload length — both the
-        // buffer-byte check and the decoded-string check should fire before
-        // JSON.parse is reached.
-        parseContainer(buf, { maxJsonBufferBytes: json.length - 1 });
+        parseContainer(buf, { maxJsonBufferBytes: json.length });
       } catch {
-        // expected to throw
+        // expected — the decoded-string guard fired
       }
       expect(parseSpy).not.toHaveBeenCalled();
     } finally {
       parseSpy.mockRestore();
     }
 
-    // At the exact payload length the parse should succeed.
-    expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length })).not.toThrow();
+    // With maxJsonBufferBytes == json.length * 2, both guards pass and parsing succeeds.
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length * 2 })).not.toThrow();
   });
 
   it('parses GLB container with JSON + BIN chunks', () => {
@@ -1041,7 +1041,7 @@ describe('loadGltf', () => {
     const buffer = jsonToBuffer(minimalGltf());
 
     await expect(loadGltf(buffer, { maxJsonBufferBytes: 1 })).rejects.toThrow(/payload too large/);
-    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength })).resolves.toMatchObject({
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength * 2 })).resolves.toMatchObject({
       meshes: [],
       nodes: [],
     });

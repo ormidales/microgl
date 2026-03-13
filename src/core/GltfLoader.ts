@@ -126,13 +126,17 @@ function safeParseGltfJson(text: string): GltfAsset {
 export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
-   * Receives the percent-decoded URI string and must return the corresponding binary data.
+   * Receives a URI string that the loader has attempted to percent-decode and must
+   * return the corresponding binary data. If the URI contains invalid percent-encoding,
+   * decoding may fail and the original (possibly still percent-encoded) URI string
+   * will be passed to this callback.
    * Required when loading plain `.gltf` files that reference external `.bin` files.
    *
    * **Security warning**: the URI received by this callback has already been validated
-   * and percent-decoded by the loader. Do not perform additional URI resolution or
-   * decoding inside this callback — doing so may re-introduce path-traversal or
-   * SSRF vulnerabilities that the loader's validation was designed to prevent.
+   * and normalization / percent-decoding have been applied on a best-effort basis by
+   * the loader. Do not perform additional URI resolution or decoding inside this
+   * callback — doing so may re-introduce path-traversal or SSRF vulnerabilities that
+   * the loader's validation was designed to prevent.
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**

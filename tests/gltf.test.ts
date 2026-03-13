@@ -1199,6 +1199,26 @@ describe('loadGltf', () => {
     expect(resolveUri).toHaveBeenCalledWith('my file.bin');
   });
 
+  it('passes percent-decoded URI to resolveUri callback for safe encoded URIs', async () => {
+    const { json, bin } = triangleAsset();
+    // %6d%6f%64%65%6c%73%2ftriangle%2ebin decodes to "models/triangle.bin"
+    json.buffers = [{ uri: '%6d%6f%64%65%6c%73%2ftriangle%2ebin', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    // The callback must receive the decoded form, not the raw percent-encoded string
+    expect(resolveUri).toHaveBeenCalledWith('models/triangle.bin');
+  });
+
+  it('rejects encoded bypass "%2e%2e/secret" before it reaches the resolveUri callback', async () => {
+    const { json, bin } = triangleAsset();
+    json.buffers = [{ uri: '%2e%2e/secret', byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).rejects.toThrow(/Only relative paths without traversal/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
   it('handles meshes with normals and UVs', async () => {
     // 3 vertices × (3 pos + 3 normal + 2 uv) = 3×8 = 24 floats = 96 bytes
     // 3 indices = 6 bytes
@@ -2113,5 +2133,13 @@ describe('GltfLoaderOptions JSDoc', () => {
 
   it('strict JSDoc documents the false default value', () => {
     expect(gltfLoaderSource).toContain('(default) in production');
+  });
+
+  it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
+    expect(gltfLoaderSource).toContain('Do not perform additional URI resolution');
+  });
+
+  it('resolveUri JSDoc documents that the URI is percent-decoded before being passed', () => {
+    expect(gltfLoaderSource).toContain('percent-decoded');
   });
 });

@@ -35,6 +35,8 @@ const GLB_CHUNK_JSON = 0x4E4F534A;
 const GLB_CHUNK_BIN = 0x004E4942;
 const UTF8_DECODER = new TextDecoder();
 const MAX_JSON_BUFFER_BYTES = 64 * 1024 * 1024;
+/** Maximum URI length accepted in strict mode (guards against catastrophic backtracking). */
+const MAX_URI_LENGTH = 2048;
 
 /**
  * Deep-clone arbitrary JSON-like data into "data-only" structures:
@@ -388,11 +390,18 @@ function validateExternalUri(uri: string, bufferIndex: number, strict?: boolean)
     );
   }
 
-  if (strict && !candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
-    throw new Error(
-      `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
-      `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
-    );
+  if (strict) {
+    if (candidates.some((v) => v.length > MAX_URI_LENGTH)) {
+      throw new Error(
+        `Buffer ${bufferIndex}: URI exceeds maximum allowed length in strict mode.`,
+      );
+    }
+    if (!candidates.every((v) => /^[A-Za-z0-9._\-/]+$/.test(v))) {
+      throw new Error(
+        `Buffer ${bufferIndex}: external URI "${uri}" contains characters not permitted in strict mode. ` +
+        `Only alphanumeric characters, dots, hyphens, underscores, and forward slashes are allowed.`,
+      );
+    }
   }
 }
 

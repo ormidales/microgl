@@ -126,8 +126,17 @@ function safeParseGltfJson(text: string): GltfAsset {
 export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
-   * Receives the raw URI string and must return the corresponding binary data.
+   * Receives a URI string that the loader has attempted to percent-decode and must
+   * return the corresponding binary data. If the URI contains invalid percent-encoding,
+   * decoding may fail and the original (possibly still percent-encoded) URI string
+   * will be passed to this callback.
    * Required when loading plain `.gltf` files that reference external `.bin` files.
+   *
+   * **Security warning**: the URI received by this callback has already been validated
+   * and normalization / percent-decoding have been applied on a best-effort basis by
+   * the loader. Do not perform additional URI resolution or decoding inside this
+   * callback — doing so may re-introduce path-traversal or SSRF vulnerabilities that
+   * the loader's validation was designed to prevent.
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
@@ -398,6 +407,40 @@ async function resolveBuffers(
     }
   };
 
+  /**
+   * Fully percent-decode a URI in a bounded loop.
+   *
+   * This prevents double-encoded traversal/scheme payloads from slipping
+   * through validation when consumers perform an additional decode.
+   *
+   * If further decoding would fail (malformed escape sequences), the last
+   * successfully decoded value is used. After the loop, if the string still
+   * contains percent-encoded bytes, the URI is rejected as suspicious.
+   */
+  const fullyDecodeUri = (uri: string, maxIterations = 5): string => {
+    let current = uri;
+    for (let i = 0; i < maxIterations; i++) {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(current);
+      } catch {
+        // Stop decoding on failure and use the last valid value.
+        break;
+      }
+      if (decoded === current) {
+        break;
+      }
+      current = decoded;
+    }
+    // If there are still percent-encoded octets present, treat as suspicious.
+    if (/%[0-9a-fA-F]{2}/.test(current)) {
+      throw new Error(
+        `Rejected suspicious percent-encoded URI after decoding: ${JSON.stringify(current)}`,
+      );
+    }
+    return current;
+  };
+
   let binChunkConsumed = false;
   for (let i = 0; i < gltfBuffers.length; i++) {
     const buf = gltfBuffers[i];
@@ -433,8 +476,15 @@ async function resolveBuffers(
             `Buffer ${i} references external URI "${buf.uri}" but no resolveUri callback was provided.`,
           );
         }
+        // Validate the original URI as authored in the glTF asset.
         validateExternalUri(buf.uri, i, options?.strict);
-        const externalBuffer = await resolveUri(buf.uri);
+        // Fully percent-decode the URI in a bounded loop so that any traversal
+        // or scheme payload only expressed after multiple decodes is exposed.
+        const fullyDecodedUri = fullyDecodeUri(buf.uri);
+        // Validate the fully decoded form as well, since this is what will be
+        // passed to the resolveUri callback and potentially used by consumers.
+        validateExternalUri(fullyDecodedUri, i, options?.strict);
+        const externalBuffer = await resolveUri(fullyDecodedUri);
         assertByteLength(externalBuffer, buf.byteLength, i);
         resolved.push(externalBuffer);
       }

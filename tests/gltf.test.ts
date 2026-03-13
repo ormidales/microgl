@@ -173,6 +173,28 @@ describe('parseContainer', () => {
     expect(() => parseContainer(oversized)).toThrow(/payload too large/);
   });
 
+  it('rejects decoded JSON string exceeding maxJsonBufferBytes before JSON.parse is called', () => {
+    const json = JSON.stringify(minimalGltf()); // pure ASCII: buf.byteLength == json.length
+    const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
+    const parseSpy = vi.spyOn(JSON, 'parse');
+    try {
+      // maxJsonBufferBytes == json.length: the byte check passes (buf.byteLength <= limit),
+      // but the decoded-string guard fires because text.length * 2 == json.length * 2 > json.length.
+      // JSON.parse must never be reached.
+      try {
+        parseContainer(buf, { maxJsonBufferBytes: json.length });
+      } catch {
+        // expected — the decoded-string guard fired
+      }
+      expect(parseSpy).not.toHaveBeenCalled();
+    } finally {
+      parseSpy.mockRestore();
+    }
+
+    // With maxJsonBufferBytes == json.length * 2, both guards pass and parsing succeeds.
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length * 2 })).not.toThrow();
+  });
+
   it('parses GLB container with JSON + BIN chunks', () => {
     const { json: srcJson, bin } = triangleAsset();
     const glb = buildGlb(srcJson, bin);
@@ -1019,7 +1041,7 @@ describe('loadGltf', () => {
     const buffer = jsonToBuffer(minimalGltf());
 
     await expect(loadGltf(buffer, { maxJsonBufferBytes: 1 })).rejects.toThrow(/payload too large/);
-    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength })).resolves.toMatchObject({
+    await expect(loadGltf(buffer, { maxJsonBufferBytes: buffer.byteLength * 2 })).resolves.toMatchObject({
       meshes: [],
       nodes: [],
     });

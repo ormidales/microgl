@@ -1149,6 +1149,39 @@ describe('loadGltf', () => {
     expect(resolveUri).not.toHaveBeenCalled();
   });
 
+  it('rejects URI exceeding 2048 characters in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    // Build a 2049-character URI using only allowed characters so it would pass
+    // the allowlist regex — only the length cap should trigger the rejection.
+    const longUri = 'a'.repeat(2045) + '.bin';
+    json.buffers = [{ uri: longUri, byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).rejects.toThrow(/exceeds maximum allowed length in strict mode/);
+    expect(resolveUri).not.toHaveBeenCalled();
+  });
+
+  it('allows URI exactly at 2048 characters in strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    const exactUri = 'a'.repeat(2044) + '.bin';
+    json.buffers = [{ uri: exactUri, byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri, strict: true })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith(exactUri);
+  });
+
+  it('does not apply URI length cap in non-strict mode', async () => {
+    const { json, bin } = triangleAsset();
+    // URI longer than 2048 chars but with only safe relative characters
+    const longUri = 'a'.repeat(2045) + '.bin';
+    json.buffers = [{ uri: longUri, byteLength: bin.byteLength }];
+    const buffer = jsonToBuffer(json);
+    const resolveUri = vi.fn().mockResolvedValue(bin);
+    await expect(loadGltf(buffer, { resolveUri })).resolves.toMatchObject({ meshes: expect.any(Array) });
+    expect(resolveUri).toHaveBeenCalledWith(longUri);
+  });
+
   it('rejects URL-encoded path traversal URI "%2e%2e%2fetc%2fpasswd"', async () => {
     const { json, bin } = triangleAsset();
     json.buffers = [{ uri: '%2e%2e%2fetc%2fpasswd', byteLength: bin.byteLength }];

@@ -264,6 +264,17 @@ export function parseContainer(
   const maxJsonBufferBytes = options?.maxJsonBufferBytes ?? MAX_JSON_BUFFER_BYTES;
   const maxJsonStringBytes = options?.maxJsonStringBytes ?? maxJsonBufferBytes * 2;
 
+  if (!Number.isFinite(maxJsonBufferBytes) || maxJsonBufferBytes < 0) {
+    throw new RangeError(
+      `maxJsonBufferBytes must be a finite non-negative number (got ${maxJsonBufferBytes}).`,
+    );
+  }
+  if (!Number.isFinite(maxJsonStringBytes) || maxJsonStringBytes < 0) {
+    throw new RangeError(
+      `maxJsonStringBytes must be a finite non-negative number (got ${maxJsonStringBytes}).`,
+    );
+  }
+
   if (buffer.byteLength >= 12 && header.getUint32(0, true) === GLB_MAGIC) {
     return parseGlb(buffer, maxJsonBufferBytes, maxJsonStringBytes);
   }
@@ -313,6 +324,12 @@ function parseGlb(
     const chunkLength = view.getUint32(offset, true);
     if (chunkLength === 0) {
       throw new Error(`Invalid chunk length: ${chunkLength}`);
+    }
+    if (offset + 8 + chunkLength > buffer.byteLength) {
+      throw new Error(
+        `GLB chunk at offset ${offset} extends beyond end of file ` +
+        `(chunk needs ${offset + 8 + chunkLength} bytes, file is ${buffer.byteLength} bytes).`,
+      );
     }
     const chunkType = view.getUint32(offset + 4, true);
     const chunkData = buffer.slice(offset + 8, offset + 8 + chunkLength);

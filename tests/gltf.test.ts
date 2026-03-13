@@ -209,10 +209,9 @@ describe('parseContainer', () => {
 
   it('rejects GLB JSON chunk exceeding maxJsonBufferBytes', () => {
     const glb = buildGlb(minimalGltf());
-    // The GLB JSON chunk is much smaller than the total file; find its actual size
-    // by parsing normally first, then set the limit just below it.
-    const { json } = parseContainer(glb);
-    const jsonChunkBytes = new TextEncoder().encode(JSON.stringify(json)).byteLength;
+    // Read the first chunk's length directly from the GLB header (bytes 12-15, little-endian).
+    // This is the actual on-disk byte length of the JSON chunk, independent of re-stringify.
+    const jsonChunkBytes = new DataView(glb).getUint32(12, true);
     expect(() =>
       parseContainer(glb, { maxJsonBufferBytes: jsonChunkBytes - 1 }),
     ).toThrow(/GLB JSON chunk too large/);
@@ -267,6 +266,52 @@ describe('parseContainer', () => {
     view.setUint32(16, 0x4E4F534A, true); // JSON
 
     expect(() => parseContainer(glb)).toThrow(/Invalid chunk length/);
+  });
+
+  it('throws when GLB chunk extends beyond end of file', () => {
+    // Build a GLB with a JSON chunk header that claims more bytes than remain.
+    // Header: magic(4) + version(4) + totalLength(4) + chunkLen(4) + chunkType(4) = 28 bytes total,
+    // but chunkLen is set to 100 so offset+8+100 > 28.
+    const glb = new ArrayBuffer(28);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true); // magic
+    view.setUint32(4, 2, true);          // version 2
+    view.setUint32(8, 28, true);         // total length
+    view.setUint32(12, 100, true);       // chunk length — exceeds file
+    view.setUint32(16, 0x4E4F534A, true); // JSON chunk type
+
+    expect(() => parseContainer(glb)).toThrow(/extends beyond end of file/);
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is NaN', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: NaN })).toThrow(RangeError);
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: NaN })).toThrow(
+      /maxJsonBufferBytes must be a finite non-negative number/,
+    );
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is Infinity', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: Infinity })).toThrow(RangeError);
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is negative', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: -1 })).toThrow(RangeError);
+  });
+
+  it('throws RangeError when maxJsonStringBytes is NaN', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonStringBytes: NaN })).toThrow(RangeError);
+    expect(() => parseContainer(buf, { maxJsonStringBytes: NaN })).toThrow(
+      /maxJsonStringBytes must be a finite non-negative number/,
+    );
+  });
+
+  it('throws RangeError when maxJsonStringBytes is negative', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonStringBytes: -1 })).toThrow(RangeError);
   });
 
   it('throws when GLB has no JSON chunk', () => {

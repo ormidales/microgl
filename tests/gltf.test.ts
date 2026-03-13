@@ -173,16 +173,15 @@ describe('parseContainer', () => {
     expect(() => parseContainer(oversized)).toThrow(/payload too large/);
   });
 
-  it('rejects decoded JSON string exceeding maxJsonBufferBytes before JSON.parse is called', () => {
+  it('rejects decoded JSON string exceeding maxJsonStringBytes before JSON.parse is called', () => {
     const json = JSON.stringify(minimalGltf()); // pure ASCII: buf.byteLength == json.length
     const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
     const parseSpy = vi.spyOn(JSON, 'parse');
     try {
-      // maxJsonBufferBytes == json.length: the byte check passes (buf.byteLength <= limit),
-      // but the decoded-string guard fires because text.length * 2 == json.length * 2 > json.length.
-      // JSON.parse must never be reached.
+      // maxJsonStringBytes less than text.length * 2: the byte check passes, but
+      // the decoded-string guard fires. JSON.parse must never be reached.
       try {
-        parseContainer(buf, { maxJsonBufferBytes: json.length });
+        parseContainer(buf, { maxJsonStringBytes: json.length });
       } catch {
         // expected — the decoded-string guard fired
       }
@@ -191,8 +190,40 @@ describe('parseContainer', () => {
       parseSpy.mockRestore();
     }
 
-    // With maxJsonBufferBytes == json.length * 2, both guards pass and parsing succeeds.
-    expect(() => parseContainer(buf, { maxJsonBufferBytes: json.length * 2 })).not.toThrow();
+    // With maxJsonStringBytes >= text.length * 2, both guards pass and parsing succeeds.
+    expect(() => parseContainer(buf, { maxJsonStringBytes: json.length * 2 })).not.toThrow();
+  });
+
+  it('maxJsonBufferBytes and maxJsonStringBytes are independent limits', () => {
+    const json = JSON.stringify(minimalGltf()); // pure ASCII
+    const buf = new TextEncoder().encode(json).buffer as ArrayBuffer;
+    // Buffer within maxJsonBufferBytes but string too large:
+    expect(() =>
+      parseContainer(buf, { maxJsonBufferBytes: json.length, maxJsonStringBytes: json.length }),
+    ).toThrow(/string too large/);
+    // Buffer too large regardless of string limit:
+    expect(() =>
+      parseContainer(buf, { maxJsonBufferBytes: json.length - 1 }),
+    ).toThrow(/payload too large/);
+  });
+
+  it('rejects GLB JSON chunk exceeding maxJsonBufferBytes', () => {
+    const glb = buildGlb(minimalGltf());
+    // Read the first chunk's length directly from the GLB header (bytes 12-15, little-endian).
+    // This is the actual on-disk byte length of the JSON chunk, independent of re-stringify.
+    const jsonChunkBytes = new DataView(glb).getUint32(12, true);
+    expect(() =>
+      parseContainer(glb, { maxJsonBufferBytes: jsonChunkBytes - 1 }),
+    ).toThrow(/GLB JSON chunk too large/);
+  });
+
+  it('rejects GLB JSON chunk decoded string exceeding maxJsonStringBytes', () => {
+    const glb = buildGlb(minimalGltf());
+    // text.length * 2 for a pure-ASCII JSON string equals json.length * 2.
+    // Setting maxJsonStringBytes to 0 ensures the guard fires.
+    expect(() =>
+      parseContainer(glb, { maxJsonStringBytes: 0 }),
+    ).toThrow(/GLB JSON chunk string too large/);
   });
 
   it('parses GLB container with JSON + BIN chunks', () => {
@@ -235,6 +266,52 @@ describe('parseContainer', () => {
     view.setUint32(16, 0x4E4F534A, true); // JSON
 
     expect(() => parseContainer(glb)).toThrow(/Invalid chunk length/);
+  });
+
+  it('throws when GLB chunk extends beyond end of file', () => {
+    // Build a GLB with a JSON chunk header that claims more bytes than remain.
+    // Header: magic(4) + version(4) + totalLength(4) + chunkLen(4) + chunkType(4) = 28 bytes total,
+    // but chunkLen is set to 100 so offset+8+100 > 28.
+    const glb = new ArrayBuffer(28);
+    const view = new DataView(glb);
+    view.setUint32(0, 0x46546C67, true); // magic
+    view.setUint32(4, 2, true);          // version 2
+    view.setUint32(8, 28, true);         // total length
+    view.setUint32(12, 100, true);       // chunk length — exceeds file
+    view.setUint32(16, 0x4E4F534A, true); // JSON chunk type
+
+    expect(() => parseContainer(glb)).toThrow(/extends beyond end of file/);
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is NaN', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: NaN })).toThrow(RangeError);
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: NaN })).toThrow(
+      /maxJsonBufferBytes must be a finite non-negative number/,
+    );
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is Infinity', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: Infinity })).toThrow(RangeError);
+  });
+
+  it('throws RangeError when maxJsonBufferBytes is negative', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonBufferBytes: -1 })).toThrow(RangeError);
+  });
+
+  it('throws RangeError when maxJsonStringBytes is NaN', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonStringBytes: NaN })).toThrow(RangeError);
+    expect(() => parseContainer(buf, { maxJsonStringBytes: NaN })).toThrow(
+      /maxJsonStringBytes must be a finite non-negative number/,
+    );
+  });
+
+  it('throws RangeError when maxJsonStringBytes is negative', () => {
+    const buf = jsonToBuffer(minimalGltf());
+    expect(() => parseContainer(buf, { maxJsonStringBytes: -1 })).toThrow(RangeError);
   });
 
   it('throws when GLB has no JSON chunk', () => {

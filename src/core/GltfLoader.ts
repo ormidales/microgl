@@ -129,9 +129,11 @@ export interface GltfLoaderOptions {
   /**
    * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
    *
-   * @security Never perform additional URI decoding or resolution inside this callback.
-   * The loader has already validated and percent-decoded the URI; re-decoding may
-   * re-introduce path-traversal or SSRF vulnerabilities.
+   * @security Do not perform additional URI decoding or resolution inside this callback.
+   * The loader has already validated and attempted to percent-decode the URI on a
+   * best-effort basis; re-decoding may re-introduce path-traversal or SSRF vulnerabilities.
+   * If percent-decoding fails due to invalid percent-encoding, the original URI string
+   * (with invalid sequences preserved) may be passed through to this callback.
    *
    * Receives a URI string and must return the corresponding binary data.
    * Required when loading plain `.gltf` files that reference external `.bin` files.

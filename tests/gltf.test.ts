@@ -2268,10 +2268,14 @@ describe('GltfLoaderOptions JSDoc', () => {
   });
 
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
-    expect(gltfLoaderSource).toContain('Do not perform additional URI resolution');
+    expect(gltfLoaderSource).toContain('Never perform additional URI decoding or resolution');
   });
 
   it('resolveUri JSDoc documents that the URI is percent-decoded before being passed', () => {
     expect(gltfLoaderSource).toContain('percent-decoded');
+  });
+
+  it('resolveUri JSDoc has @security tag at the top of the comment block', () => {
+    expect(gltfLoaderSource).toMatch(/\/\*\*[^]*?@security Never perform additional URI decoding[^]*?resolveUri\?:/);
   });
 });

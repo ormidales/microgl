@@ -2268,10 +2268,39 @@ describe('GltfLoaderOptions JSDoc', () => {
   });
 
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
-    expect(gltfLoaderSource).toContain('Do not perform additional URI resolution');
+    expect(gltfLoaderSource).toContain('Never perform additional URI decoding or resolution');
   });
 
   it('resolveUri JSDoc documents that the URI is percent-decoded before being passed', () => {
     expect(gltfLoaderSource).toContain('percent-decoded');
+  });
+
+  it('resolveUri JSDoc has @security tag at the top of the comment block', () => {
+    const resolveUriIndex = gltfLoaderSource.indexOf('resolveUri?:');
+    expect(resolveUriIndex).toBeGreaterThan(-1);
+
+    const commentStart = gltfLoaderSource.lastIndexOf('/**', resolveUriIndex);
+    expect(commentStart).toBeGreaterThan(-1);
+
+    const commentEnd = gltfLoaderSource.indexOf('*/', commentStart);
+    expect(commentEnd).toBeGreaterThan(commentStart);
+
+    const jsdocBlock = gltfLoaderSource.slice(commentStart, commentEnd);
+    const lines = jsdocBlock.split('\n');
+
+    // Find the first non-empty content line after the opening `/**`
+    let firstContentLine: string | undefined;
+    for (let i = 1; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      // Strip leading `*` and optional following space
+      const content = trimmed.replace(/^\* ?/, '').trim();
+      if (content.length > 0) {
+        firstContentLine = content;
+        break;
+      }
+    }
+
+    expect(firstContentLine).toBeDefined();
+    expect(firstContentLine!.startsWith('@security')).toBe(true);
   });
 });

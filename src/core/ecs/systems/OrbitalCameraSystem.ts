@@ -51,12 +51,23 @@ export class OrbitalCameraSystem extends System {
    *
    * Automatically clamped to the range `[0, 89.999]` to ensure the up-vector
    * never becomes degenerate regardless of what value the caller supplies.
+   * See the setter for details on out-of-range handling.
    */
   public get maxElevationDeg(): number {
     return this._maxElevationDeg;
   }
 
+  /**
+   * Sets the maximum elevation angle in degrees.
+   * Values outside `[0, 89.999]` are clamped and a `console.warn` is emitted;
+   * the read-back value may therefore differ from the assigned value.
+   */
   public set maxElevationDeg(value: number) {
+    if (value < 0 || value > 89.999) {
+      console.warn(
+        `OrbitalCameraSystem: maxElevationDeg ${value} is out of range [0, 89.999] and will be clamped.`
+      );
+    }
     // Clamp to a safe range to avoid reaching the poles and degenerating the up-vector.
     this._maxElevationDeg = Math.min(89.999, Math.max(0, value));
   }

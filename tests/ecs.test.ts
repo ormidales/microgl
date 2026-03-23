@@ -1788,4 +1788,37 @@ describe('OrbitalCameraSystem', () => {
     expect(() => sys.attach(canvas)).not.toThrow();
     expect(() => sys.detach()).not.toThrow();
   });
+
+  it('maxElevationDeg setter clamps values above 89.999 and emits a console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = 95;
+    expect(sys.maxElevationDeg).toBe(89.999);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
+    expect(warnSpy.mock.calls[0][0]).toContain('95');
+    expect(warnSpy.mock.calls[0][0]).toContain('[0, 89.999]');
+    warnSpy.mockRestore();
+  });
+
+  it('maxElevationDeg setter clamps values below 0 and emits a console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = -10;
+    expect(sys.maxElevationDeg).toBe(0);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
+    expect(warnSpy.mock.calls[0][0]).toContain('-10');
+    expect(warnSpy.mock.calls[0][0]).toContain('[0, 89.999]');
+    warnSpy.mockRestore();
+  });
+
+  it('maxElevationDeg setter does not warn for values within [0, 89.999]', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = 45;
+    expect(sys.maxElevationDeg).toBe(45);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });

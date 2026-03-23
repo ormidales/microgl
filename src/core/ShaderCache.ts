@@ -255,6 +255,14 @@ export class ShaderCache {
    * cache.releaseProgram(key);
    * ```
    *
+   * @remarks
+   * Always call `getProgramKey` **before** `getProgram` (or immediately after,
+   * while the program is still cached) to guarantee the returned key matches the
+   * slot actually used. In the rare case of a hash collision, the resolved
+   * composite key (`primary:secondary`) is stable for the lifetime of the cached
+   * entry, but may differ from what a later call would return if the entry has
+   * been evicted.
+   *
    * @param vertexSource GLSL vertex shader source
    * @param fragmentSource GLSL fragment shader source
    * @param key Explicit cache key, if one was supplied to `getProgram`.

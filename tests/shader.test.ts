@@ -1046,7 +1046,7 @@ describe('ShaderCache JSDoc', () => {
     const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
     const remarksBody = shaderCacheSource.slice(remarksIdx, nextParamIdx);
     expect(remarksBody).toContain('before');
-    expect(remarksBody).toContain('getProgram');
+    expect(remarksBody).toMatch(/\bgetProgram\b/);
   });
 
   it('getProgramKey @remarks mentions eviction as the cause of key instability', () => {

@@ -1031,6 +1031,35 @@ describe('RenderSystem', () => {
     expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
   });
 
+  it('constructor JSDoc documents all three @param tags', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the constructor
+    const constructorJsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*constructor\(/);
+    expect(constructorJsdocMatch).not.toBeNull();
+    const constructorJsdoc = constructorJsdocMatch![0];
+    // All three constructor parameters must have @param documentation
+    expect(constructorJsdoc).toContain('@param renderer');
+    expect(constructorJsdoc).toContain('@param material');
+    expect(constructorJsdoc).toContain('@param onMeshBufferAllocationFailure');
+  });
+
+  it('constructor JSDoc documents the one-time invocation behaviour of onMeshBufferAllocationFailure', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Restrict checks to the JSDoc block immediately preceding the constructor
+    const ctorJsdocMatch = source.match(/\/\*\*[\s\S]*?constructor\s*\(/);
+    expect(ctorJsdocMatch).not.toBeNull();
+    const ctorJsdoc = ctorJsdocMatch![0];
+    // The @param block must reference the threshold constant and the reset method
+    expect(ctorJsdoc).toContain('CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD');
+    expect(ctorJsdoc).toContain('internal failure counters are reset');
+  });
+
   it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();

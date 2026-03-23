@@ -41,6 +41,15 @@ export class RenderSystem extends System {
     }
   >();
 
+  /**
+   * @param renderer  The WebGL renderer that provides the `gl` context.
+   * @param material  The material (shader program) used for all draw calls.
+   * @param onMeshBufferAllocationFailure  Optional callback invoked once when
+   *   {@link CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD} consecutive GPU
+   *   mesh-buffer allocation failures are detected. Useful for surfacing a
+   *   degraded-rendering warning to the application layer. Not called again
+   *   until `resetGpuResources` resets the failure counter.
+   */
   constructor(
     private readonly renderer?: Renderer,
     private readonly material?: Material,

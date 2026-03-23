@@ -1031,6 +1031,27 @@ describe('RenderSystem', () => {
     expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
   });
 
+  it('constructor JSDoc documents all three @param tags', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // All three constructor parameters must have @param documentation
+    expect(source).toContain('@param renderer');
+    expect(source).toContain('@param material');
+    expect(source).toContain('@param onMeshBufferAllocationFailure');
+  });
+
+  it('constructor JSDoc documents the one-time invocation behaviour of onMeshBufferAllocationFailure', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // The @param block must reference the threshold constant and the reset method
+    expect(source).toContain('CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD');
+    expect(source).toContain('resetGpuResources');
+  });
+
   it('calls allocation failure handler once when failures are consecutive', () => {
     const em = new EntityManager();
     const id = em.createEntity();

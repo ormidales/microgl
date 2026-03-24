@@ -437,6 +437,31 @@ describe('EntityManager', () => {
     expect((em as any).views.size).toBe(0);
     expect((em as any).viewKeysByComponentType.size).toBe(0);
   });
+
+  it('addComponent JSDoc documents ref-counting and same-instance no-op behaviour', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/EntityManager.ts', import.meta.url),
+      'utf8',
+    );
+    const addComponentJsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*addComponent\(/);
+    expect(addComponentJsdocMatch).not.toBeNull();
+    const addComponentJsdoc = addComponentJsdocMatch![0];
+    expect(addComponentJsdoc).toContain('reference count');
+    expect(addComponentJsdoc).toContain('no-op');
+  });
+
+  it('removeComponent JSDoc documents the decrement-and-dispose contract', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/EntityManager.ts', import.meta.url),
+      'utf8',
+    );
+    const removeComponentJsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*removeComponent\(/);
+    expect(removeComponentJsdocMatch).not.toBeNull();
+    const removeComponentJsdoc = removeComponentJsdocMatch![0];
+    expect(removeComponentJsdoc).toContain('reference count');
+    expect(removeComponentJsdoc).toContain('disposed');
+    expect(removeComponentJsdoc).toContain('no-op');
+  });
 });
 
 // ---------------------------------------------------------------------------

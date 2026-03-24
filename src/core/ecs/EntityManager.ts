@@ -76,7 +76,15 @@ export class EntityManager {
   // Component management
   // ---------------------------------------------------------------------------
 
-  /** Attach a component to an entity. */
+  /**
+   * Attach a component to an entity.
+   *
+   * If the entity already holds a **different** instance of the same component
+   * type, the old instance's reference count is decremented (and it is disposed
+   * when it reaches zero). The new instance's reference count is incremented.
+   * Attaching the **same** instance that is already attached is a no-op with
+   * respect to ref-counting.
+   */
   addComponent(id: EntityId, component: Component): void {
     if (!this.entities.has(id)) return;
 
@@ -109,7 +117,13 @@ export class EntityManager {
     }
   }
 
-  /** Remove a component type from an entity. */
+  /**
+   * Remove a component type from an entity.
+   *
+   * Decrements the removed component's reference count; the component is
+   * disposed when the count reaches zero. This method is a no-op if the entity
+   * does not have the specified component type.
+   */
   removeComponent(id: EntityId, componentType: string): void {
     if (!this.hasComponent(id, componentType)) return;
 

@@ -32,9 +32,9 @@ function minimalGltf(overrides: Partial<GltfAsset> = {}): GltfAsset {
 }
 
 /**
- * Extract the JSDoc block (`/** … *\/`) that immediately precedes the first
- * occurrence of `fieldDeclaration` in `source`. Returns the raw text of the
- * block (excluding the closing `*\/`), or an empty string if not found.
+ * Extract the most recent JSDoc block (`/** … *\/`) that appears before the
+ * first occurrence of `fieldDeclaration` in `source`. Returns the raw text of
+ * the block (excluding the closing `*\/`), or an empty string if not found.
  */
 function extractPrecedingJsDoc(source: string, fieldDeclaration: string): string {
   const fieldIndex = source.indexOf(fieldDeclaration);

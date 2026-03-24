@@ -1112,7 +1112,7 @@ describe('RenderSystem', () => {
       'utf8',
     );
     // Restrict checks to the JSDoc block immediately preceding the constructor
-    const ctorJsdocMatch = source.match(/\/\*\*[\s\S]*?constructor\s*\(/);
+    const ctorJsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*constructor\s*\(/);
     expect(ctorJsdocMatch).not.toBeNull();
     const ctorJsdoc = ctorJsdocMatch![0];
     // The @param block must reference the threshold constant and the reset method

@@ -77,9 +77,14 @@ export class OrbitalCameraSystem extends System {
       );
     }
     // Clamp to a safe range to avoid reaching the poles and degenerating the up-vector.
-    this._maxElevationDeg = Number.isFinite(value)
-      ? Math.min(MAX_ELEVATION_DEG, Math.max(MIN_ELEVATION_DEG, value))
-      : MIN_ELEVATION_DEG;
+    if (Number.isFinite(value)) {
+      this._maxElevationDeg = Math.min(MAX_ELEVATION_DEG, Math.max(MIN_ELEVATION_DEG, value));
+    } else if (value === Infinity) {
+      this._maxElevationDeg = MAX_ELEVATION_DEG;
+    } else {
+      // NaN, -Infinity, or other non-finite values clamp to the minimum.
+      this._maxElevationDeg = MIN_ELEVATION_DEG;
+    }
   }
 
   // ---- Internal state -------------------------------------------------------

@@ -1044,7 +1044,10 @@ describe('ShaderCache JSDoc', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
     const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    const remarksBody = shaderCacheSource.slice(remarksIdx, nextParamIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(nextParamIdx > remarksIdx || commentEndIdx > remarksIdx).toBe(true);
+    const endIdx = nextParamIdx > remarksIdx ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('before');
     expect(remarksBody).toMatch(/\bgetProgram\b/);
   });
@@ -1053,7 +1056,10 @@ describe('ShaderCache JSDoc', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
     const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    const remarksBody = shaderCacheSource.slice(remarksIdx, nextParamIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(nextParamIdx > remarksIdx || commentEndIdx > remarksIdx).toBe(true);
+    const endIdx = nextParamIdx > remarksIdx ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('evicted');
   });
 

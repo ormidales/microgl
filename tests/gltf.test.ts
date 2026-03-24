@@ -2267,6 +2267,26 @@ describe('GltfLoaderOptions JSDoc', () => {
     expect(gltfLoaderSource).toContain('(default) in production');
   });
 
+  it('strict JSDoc has a labelled Quaternion validation section', () => {
+    expect(gltfLoaderSource).toContain('**Quaternion validation**');
+  });
+
+  it('strict JSDoc has a labelled URI character whitelist section', () => {
+    expect(gltfLoaderSource).toContain('**URI character whitelist**');
+  });
+
+  it('strict JSDoc explicitly lists all allowed URI characters', () => {
+    expect(gltfLoaderSource).toContain('alphanumeric');
+    expect(gltfLoaderSource).toContain('dots');
+    expect(gltfLoaderSource).toContain('hyphens');
+    expect(gltfLoaderSource).toContain('underscores');
+    expect(gltfLoaderSource).toContain('forward slashes');
+  });
+
+  it('strict JSDoc distinguishes baseline protections from strict-only behaviour', () => {
+    expect(gltfLoaderSource).toContain('always active regardless of this flag');
+  });
+
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
     expect(gltfLoaderSource).toContain('Never perform additional URI decoding or resolution');
   });

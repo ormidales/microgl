@@ -1236,6 +1236,7 @@ describe('OrbitalCameraSystem', () => {
   });
   afterEach(() => {
     delete (globalThis as any).window;
+    vi.restoreAllMocks();
   });
 
   function mockWindowListeners() {
@@ -1793,24 +1794,22 @@ describe('OrbitalCameraSystem', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const sys = new OrbitalCameraSystem();
     sys.maxElevationDeg = 95;
-    expect(sys.maxElevationDeg).toBe(89.999);
+    expect(sys.maxElevationDeg).toBe(OrbitalCameraSystem.MAX_ELEVATION_DEG);
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
     expect(warnSpy.mock.calls[0][0]).toContain('95');
-    expect(warnSpy.mock.calls[0][0]).toContain('[0, 89.999]');
-    warnSpy.mockRestore();
+    expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
   });
 
   it('maxElevationDeg setter clamps values below 0 and emits a console.warn', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const sys = new OrbitalCameraSystem();
     sys.maxElevationDeg = -10;
-    expect(sys.maxElevationDeg).toBe(0);
+    expect(sys.maxElevationDeg).toBe(OrbitalCameraSystem.MIN_ELEVATION_DEG);
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
     expect(warnSpy.mock.calls[0][0]).toContain('-10');
-    expect(warnSpy.mock.calls[0][0]).toContain('[0, 89.999]');
-    warnSpy.mockRestore();
+    expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
   });
 
   it('maxElevationDeg setter does not warn for values within [0, 89.999]', () => {
@@ -1819,6 +1818,15 @@ describe('OrbitalCameraSystem', () => {
     sys.maxElevationDeg = 45;
     expect(sys.maxElevationDeg).toBe(45);
     expect(warnSpy).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
+  });
+
+  it('maxElevationDeg setter clamps NaN and emits a console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = NaN;
+    expect(Number.isFinite(sys.maxElevationDeg)).toBe(true);
+    expect(sys.maxElevationDeg).toBe(OrbitalCameraSystem.MIN_ELEVATION_DEG);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
   });
 });

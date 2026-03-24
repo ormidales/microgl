@@ -12,6 +12,11 @@ import type { CameraComponent } from '../components/CameraComponent';
  * and zoom (scroll wheel).
  */
 export class OrbitalCameraSystem extends System {
+  /** Minimum allowed value for {@link maxElevationDeg}. */
+  public static readonly MIN_ELEVATION_DEG: number = 0;
+  /** Maximum allowed value for {@link maxElevationDeg}. Kept below 90° to prevent a degenerate up-vector at the poles. */
+  public static readonly MAX_ELEVATION_DEG: number = 89.999;
+
   private static readonly DOM_DELTA_LINE = typeof WheelEvent === 'undefined' ? 1 : WheelEvent.DOM_DELTA_LINE;
   private static readonly DOM_DELTA_PAGE = typeof WheelEvent === 'undefined' ? 2 : WheelEvent.DOM_DELTA_PAGE;
   /** Fixed pixel equivalent of one scroll line (matches the browser default font size). */
@@ -49,9 +54,9 @@ export class OrbitalCameraSystem extends System {
    * camera from reaching the zenith / nadir poles where the `lookAt` up-vector
    * becomes undefined and causes a sudden axis flip or jitter.
    *
-   * Automatically clamped to the range `[0, 89.999]` to ensure the up-vector
-   * never becomes degenerate regardless of what value the caller supplies.
-   * See the setter for details on out-of-range handling.
+   * Automatically clamped to the range `[{@link OrbitalCameraSystem.MIN_ELEVATION_DEG}, {@link OrbitalCameraSystem.MAX_ELEVATION_DEG}]`
+   * to ensure the up-vector never becomes degenerate regardless of what value
+   * the caller supplies. See the setter for details on out-of-range handling.
    */
   public get maxElevationDeg(): number {
     return this._maxElevationDeg;
@@ -59,17 +64,22 @@ export class OrbitalCameraSystem extends System {
 
   /**
    * Sets the maximum elevation angle in degrees.
-   * Values outside `[0, 89.999]` are clamped and a `console.warn` is emitted;
-   * the read-back value may therefore differ from the assigned value.
+   * Non-finite values (`NaN`, `Infinity`) and values outside
+   * `[{@link OrbitalCameraSystem.MIN_ELEVATION_DEG}, {@link OrbitalCameraSystem.MAX_ELEVATION_DEG}]`
+   * are clamped and a `console.warn` is emitted; the read-back value may
+   * therefore differ from the assigned value.
    */
   public set maxElevationDeg(value: number) {
-    if (value < 0 || value > 89.999) {
+    const { MIN_ELEVATION_DEG, MAX_ELEVATION_DEG } = OrbitalCameraSystem;
+    if (!Number.isFinite(value) || value < MIN_ELEVATION_DEG || value > MAX_ELEVATION_DEG) {
       console.warn(
-        `OrbitalCameraSystem: maxElevationDeg ${value} is out of range [0, 89.999] and will be clamped.`
+        `OrbitalCameraSystem: maxElevationDeg ${value} is out of range [${MIN_ELEVATION_DEG}, ${MAX_ELEVATION_DEG}] and will be clamped.`
       );
     }
     // Clamp to a safe range to avoid reaching the poles and degenerating the up-vector.
-    this._maxElevationDeg = Math.min(89.999, Math.max(0, value));
+    this._maxElevationDeg = Number.isFinite(value)
+      ? Math.min(MAX_ELEVATION_DEG, Math.max(MIN_ELEVATION_DEG, value))
+      : MIN_ELEVATION_DEG;
   }
 
   // ---- Internal state -------------------------------------------------------

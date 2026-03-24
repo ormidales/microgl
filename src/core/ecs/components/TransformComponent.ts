@@ -31,6 +31,15 @@ export class TransformComponent implements Component {
     public scaleZ: number = 1,
   ) {}
 
+  /**
+   * Returns `true` if any of the transform fields (`x`, `y`, `z`,
+   * `scaleX`, `scaleY`, `scaleZ`, or any quaternion component of
+   * `rotation`) have changed since the last call to {@link markModelMatrixClean}.
+   *
+   * Detection works by comparing current field values against an internal
+   * snapshot. In-place mutation of `rotation` (e.g. `transform.rotation[1] = v`)
+   * **is** detected because each quaternion component is snapshotted individually.
+   */
   needsModelMatrixUpdate(): boolean {
     return this.dirty
       || this.x !== this.lastX
@@ -45,6 +54,12 @@ export class TransformComponent implements Component {
       || this.scaleZ !== this.lastScaleZ;
   }
 
+  /**
+   * Snapshots the current transform fields so that subsequent calls to
+   * {@link needsModelMatrixUpdate} return `false` until a field is mutated again.
+   *
+   * Called automatically by {@link RenderSystem} after rebuilding the model matrix.
+   */
   markModelMatrixClean(): void {
     this.lastX = this.x;
     this.lastY = this.y;

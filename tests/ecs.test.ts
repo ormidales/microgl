@@ -465,6 +465,41 @@ describe('EntityManager', () => {
 });
 
 // ---------------------------------------------------------------------------
+// TransformComponent JSDoc
+// ---------------------------------------------------------------------------
+
+describe('TransformComponent JSDoc', () => {
+  const source = readFileSync(
+    new URL('../src/core/ecs/components/TransformComponent.ts', import.meta.url),
+    'utf8',
+  );
+
+  it('needsModelMatrixUpdate has a JSDoc describing the snapshot-comparison mechanism', () => {
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*needsModelMatrixUpdate\(/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('snapshot');
+    expect(jsdoc).toContain('markModelMatrixClean');
+  });
+
+  it('needsModelMatrixUpdate JSDoc explicitly mentions in-place quaternion mutation detection', () => {
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*needsModelMatrixUpdate\(/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('rotation');
+    expect(jsdoc).toContain('mutation');
+  });
+
+  it('markModelMatrixClean has a JSDoc explaining when it is called', () => {
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*markModelMatrixClean\(/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('RenderSystem');
+    expect(jsdoc).toContain('needsModelMatrixUpdate');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // forEachEntityWith
 // ---------------------------------------------------------------------------
 

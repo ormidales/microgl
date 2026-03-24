@@ -173,11 +173,14 @@ export interface GltfLoaderOptions {
    * `rotation` field causes `loadGltf` to throw an `Error` rather than
    * silently normalizing it.
    *
-   * **URI character whitelist** — external buffer URIs must consist exclusively
-   * of alphanumeric characters, dots (`.`), hyphens (`-`), underscores (`_`),
-   * and forward slashes (`/`). Any other character triggers an error.
+   * **URI character whitelist and length cap** — external buffer URIs must
+   * consist exclusively of alphanumeric characters, dots (`.`), hyphens (`-`),
+   * underscores (`_`), and forward slashes (`/`), and must not exceed 2048
+   * characters (checked on both the raw and percent-decoded forms). Any other
+   * character or excessive length triggers an error.
    * Baseline protections (blocking absolute/protocol URIs, leading slashes,
-   * backslashes, and `..` segments) are always active regardless of this flag.
+   * backslashes, `..` segments, and any URI containing null bytes in either
+   * the raw or percent-decoded form) are always active regardless of this flag.
    *
    * Enable in development / CI to catch malformed assets early; leave `false`
    * (default) in production to be lenient with third-party exporters.

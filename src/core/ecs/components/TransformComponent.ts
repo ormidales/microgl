@@ -34,7 +34,8 @@ export class TransformComponent implements Component {
   /**
    * Returns `true` if any of the transform fields (`x`, `y`, `z`,
    * `scaleX`, `scaleY`, `scaleZ`, or any quaternion component of
-   * `rotation`) have changed since the last call to {@link markModelMatrixClean}.
+   * `rotation`) have changed since the last call to {@link markModelMatrixClean},
+   * or if the internal dirty flag has been set via {@link setDirty}.
    *
    * Detection works by comparing current field values against an internal
    * snapshot. In-place mutation of `rotation` (e.g. `transform.rotation[1] = v`)
@@ -56,7 +57,8 @@ export class TransformComponent implements Component {
 
   /**
    * Snapshots the current transform fields so that subsequent calls to
-   * {@link needsModelMatrixUpdate} return `false` until a field is mutated again.
+   * {@link needsModelMatrixUpdate} return `false` until a tracked field is
+   * mutated again or {@link setDirty} is called.
    *
    * Called automatically by {@link RenderSystem} after rebuilding the model matrix.
    */

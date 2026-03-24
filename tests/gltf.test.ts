@@ -32,6 +32,21 @@ function minimalGltf(overrides: Partial<GltfAsset> = {}): GltfAsset {
 }
 
 /**
+ * Extract the JSDoc block (`/** … *\/`) that immediately precedes the first
+ * occurrence of `fieldDeclaration` in `source`. Returns the raw text of the
+ * block (excluding the closing `*\/`), or an empty string if not found.
+ */
+function extractPrecedingJsDoc(source: string, fieldDeclaration: string): string {
+  const fieldIndex = source.indexOf(fieldDeclaration);
+  if (fieldIndex === -1) return '';
+  const commentStart = source.lastIndexOf('/**', fieldIndex);
+  if (commentStart === -1) return '';
+  const commentEnd = source.indexOf('*/', commentStart);
+  if (commentEnd === -1) return '';
+  return source.slice(commentStart, commentEnd);
+}
+
+/**
  * Build a GLB binary container from JSON + optional binary chunk.
  * Follows the glTF 2.0 spec §5.
  */
@@ -2265,6 +2280,42 @@ describe('GltfLoaderOptions JSDoc', () => {
 
   it('strict JSDoc documents the false default value', () => {
     expect(gltfLoaderSource).toContain('(default) in production');
+  });
+
+  it('strict JSDoc has a labelled Quaternion validation section', () => {
+    expect(gltfLoaderSource).toContain('**Quaternion validation**');
+  });
+
+  it('strict JSDoc has a labelled URI character whitelist section', () => {
+    expect(gltfLoaderSource).toContain('**URI character whitelist');
+  });
+
+  describe('strict option JSDoc block content', () => {
+    const strictJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'strict?: boolean;');
+
+    it('is present in source', () => {
+      expect(strictJsDoc).not.toBe('');
+    });
+
+    it('explicitly lists all allowed URI characters', () => {
+      expect(strictJsDoc).toContain('alphanumeric');
+      expect(strictJsDoc).toContain('dots');
+      expect(strictJsDoc).toContain('hyphens');
+      expect(strictJsDoc).toContain('underscores');
+      expect(strictJsDoc).toContain('forward slashes');
+    });
+
+    it('documents the strict-mode URI length cap', () => {
+      expect(strictJsDoc).toContain('2048');
+    });
+
+    it('distinguishes baseline protections from strict-only behaviour', () => {
+      expect(strictJsDoc).toContain('always active regardless of this flag');
+    });
+
+    it('lists null bytes in baseline protections', () => {
+      expect(strictJsDoc).toContain('null bytes');
+    });
   });
 
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {

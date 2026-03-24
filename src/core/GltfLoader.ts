@@ -167,17 +167,20 @@ export interface GltfLoaderOptions {
    */
   normalizeNormals?: boolean;
   /**
-   * When `true`, a non-unit quaternion found in a node's `rotation` field causes
-   * `loadGltf` to throw an `Error` rather than silently normalizing it.
+   * When `true`, enables strict validation for two categories:
    *
-   * URI validation notes:
-   * - Baseline protections (blocking absolute/protocol/scheme URIs, leading
-   *   slashes, backslashes, and path-traversal `..` segments) are always
-   *   enforced, regardless of this flag.
-   * - When `strict` is `true`, an additional URI character whitelist is applied
-   *   for external buffer references: only alphanumeric characters, dots,
-   *   hyphens, underscores, and forward slashes are permitted in the URI
-   *   (all non-`data:` scheme URIs must be simple relative paths).
+   * **Quaternion validation** — a non-unit quaternion found in a node's
+   * `rotation` field causes `loadGltf` to throw an `Error` rather than
+   * silently normalizing it.
+   *
+   * **URI character whitelist and length cap** — external buffer URIs must
+   * consist exclusively of alphanumeric characters, dots (`.`), hyphens (`-`),
+   * underscores (`_`), and forward slashes (`/`), and must not exceed 2048
+   * characters (checked on both the raw and percent-decoded forms). Any other
+   * character or excessive length triggers an error.
+   * Baseline protections (blocking absolute/protocol URIs, leading slashes,
+   * backslashes, `..` segments, and any URI containing null bytes in either
+   * the raw or percent-decoded form) are always active regardless of this flag.
    *
    * Enable in development / CI to catch malformed assets early; leave `false`
    * (default) in production to be lenient with third-party exporters.

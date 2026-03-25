@@ -127,18 +127,15 @@ function safeParseGltfJson(text: string): GltfAsset {
 
 export interface GltfLoaderOptions {
   /**
-   * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
-   * Receives a URI string that the loader has attempted to percent-decode and must
-   * return the corresponding binary data. If the URI contains invalid percent-encoding,
-   * decoding may fail and the original (possibly still percent-encoded) URI string
-   * will be passed to this callback.
-   * Required when loading plain `.gltf` files that reference external `.bin` files.
+   * @security Never perform additional URI decoding or resolution inside this callback.
+   * The loader has already validated and best-effort percent-decoded the URI;
+   * re-decoding may re-introduce path-traversal or SSRF vulnerabilities.
+   * If percent-decoding fails due to invalid percent-encoding, the original URI string
+   * (with invalid sequences preserved) may be passed to this callback.
    *
-   * **Security warning**: the URI received by this callback has already been validated
-   * and normalization / percent-decoding have been applied on a best-effort basis by
-   * the loader. Do not perform additional URI resolution or decoding inside this
-   * callback — doing so may re-introduce path-traversal or SSRF vulnerabilities that
-   * the loader's validation was designed to prevent.
+   * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
+   * Receives a URI string and must return the corresponding binary data.
+   * Required when loading plain `.gltf` files that reference external `.bin` files.
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**
@@ -170,17 +167,20 @@ export interface GltfLoaderOptions {
    */
   normalizeNormals?: boolean;
   /**
-   * When `true`, a non-unit quaternion found in a node's `rotation` field causes
-   * `loadGltf` to throw an `Error` rather than silently normalizing it.
+   * When `true`, enables strict validation for two categories:
    *
-   * URI validation notes:
-   * - Baseline protections (blocking absolute/protocol/scheme URIs, leading
-   *   slashes, backslashes, and path-traversal `..` segments) are always
-   *   enforced, regardless of this flag.
-   * - When `strict` is `true`, an additional URI character whitelist is applied
-   *   for external buffer references: only alphanumeric characters, dots,
-   *   hyphens, underscores, and forward slashes are permitted in the URI
-   *   (all non-`data:` scheme URIs must be simple relative paths).
+   * **Quaternion validation** — a non-unit quaternion found in a node's
+   * `rotation` field causes `loadGltf` to throw an `Error` rather than
+   * silently normalizing it.
+   *
+   * **URI character whitelist and length cap** — external buffer URIs must
+   * consist exclusively of alphanumeric characters, dots (`.`), hyphens (`-`),
+   * underscores (`_`), and forward slashes (`/`), and must not exceed 2048
+   * characters (checked on both the raw and percent-decoded forms). Any other
+   * character or excessive length triggers an error.
+   * Baseline protections (blocking absolute/protocol URIs, leading slashes,
+   * backslashes, `..` segments, and any URI containing null bytes in either
+   * the raw or percent-decoded form) are always active regardless of this flag.
    *
    * Enable in development / CI to catch malformed assets early; leave `false`
    * (default) in production to be lenient with third-party exporters.

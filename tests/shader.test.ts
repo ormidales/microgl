@@ -9,6 +9,7 @@ import {
 } from '../src/core/Material';
 
 const materialSource = readFileSync(new URL('../src/core/Material.ts', import.meta.url), 'utf8');
+const shaderCacheSource = readFileSync(new URL('../src/core/ShaderCache.ts', import.meta.url), 'utf8');
 
 // ---------------------------------------------------------------------------
 // WebGL 2 mock helpers
@@ -1026,5 +1027,48 @@ describe('Default shader sources', () => {
     expect(typeof DEFAULT_FRAGMENT_SOURCE).toBe('string');
     expect(DEFAULT_FRAGMENT_SOURCE.length).toBeGreaterThan(0);
     expect(DEFAULT_FRAGMENT_SOURCE).toContain('#version 300 es');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ShaderCache JSDoc
+// ---------------------------------------------------------------------------
+
+describe('ShaderCache JSDoc', () => {
+  it('getProgramKey has a @remarks block documenting key-stability expectations', () => {
+    const remarksIdx = shaderCacheSource.indexOf('@remarks', shaderCacheSource.indexOf('getProgramKey'));
+    expect(remarksIdx).toBeGreaterThan(-1);
+  });
+
+  it('getProgramKey @remarks mentions calling getProgramKey before getProgram', () => {
+    const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
+    const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
+    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
+    expect(remarksBody).toContain('before');
+    expect(remarksBody).toMatch(/\bgetProgram\b/);
+  });
+
+  it('getProgramKey @remarks mentions eviction as the cause of key instability', () => {
+    const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
+    const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
+    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
+    expect(remarksBody).toContain('evicted');
+  });
+
+  it('getProgramKey JSDoc code example is preserved', () => {
+    const exampleIdx = shaderCacheSource.indexOf('cache.getProgramKey(vertSrc, fragSrc)');
+    expect(exampleIdx).toBeGreaterThan(-1);
+    expect(shaderCacheSource.indexOf('cache.retainProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
+    expect(shaderCacheSource.indexOf('cache.releaseProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
   });
 });

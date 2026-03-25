@@ -32,6 +32,21 @@ function minimalGltf(overrides: Partial<GltfAsset> = {}): GltfAsset {
 }
 
 /**
+ * Extract the most recent JSDoc block (`/** … *\/`) that appears before the
+ * first occurrence of `fieldDeclaration` in `source`. Returns the raw text of
+ * the block (excluding the closing `*\/`), or an empty string if not found.
+ */
+function extractPrecedingJsDoc(source: string, fieldDeclaration: string): string {
+  const fieldIndex = source.indexOf(fieldDeclaration);
+  if (fieldIndex === -1) return '';
+  const commentStart = source.lastIndexOf('/**', fieldIndex);
+  if (commentStart === -1) return '';
+  const commentEnd = source.indexOf('*/', commentStart);
+  if (commentEnd === -1) return '';
+  return source.slice(commentStart, commentEnd);
+}
+
+/**
  * Build a GLB binary container from JSON + optional binary chunk.
  * Follows the glTF 2.0 spec §5.
  */
@@ -2267,11 +2282,76 @@ describe('GltfLoaderOptions JSDoc', () => {
     expect(gltfLoaderSource).toContain('(default) in production');
   });
 
+  it('strict JSDoc has a labelled Quaternion validation section', () => {
+    expect(gltfLoaderSource).toContain('**Quaternion validation**');
+  });
+
+  it('strict JSDoc has a labelled URI character whitelist section', () => {
+    expect(gltfLoaderSource).toContain('**URI character whitelist');
+  });
+
+  describe('strict option JSDoc block content', () => {
+    const strictJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'strict?: boolean;');
+
+    it('is present in source', () => {
+      expect(strictJsDoc).not.toBe('');
+    });
+
+    it('explicitly lists all allowed URI characters', () => {
+      expect(strictJsDoc).toContain('alphanumeric');
+      expect(strictJsDoc).toContain('dots');
+      expect(strictJsDoc).toContain('hyphens');
+      expect(strictJsDoc).toContain('underscores');
+      expect(strictJsDoc).toContain('forward slashes');
+    });
+
+    it('documents the strict-mode URI length cap', () => {
+      expect(strictJsDoc).toContain('2048');
+    });
+
+    it('distinguishes baseline protections from strict-only behaviour', () => {
+      expect(strictJsDoc).toContain('always active regardless of this flag');
+    });
+
+    it('lists null bytes in baseline protections', () => {
+      expect(strictJsDoc).toContain('null bytes');
+    });
+  });
+
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
-    expect(gltfLoaderSource).toContain('Do not perform additional URI resolution');
+    expect(gltfLoaderSource).toContain('Never perform additional URI decoding or resolution');
   });
 
   it('resolveUri JSDoc documents that the URI is percent-decoded before being passed', () => {
     expect(gltfLoaderSource).toContain('percent-decoded');
+  });
+
+  it('resolveUri JSDoc has @security tag at the top of the comment block', () => {
+    const resolveUriIndex = gltfLoaderSource.indexOf('resolveUri?:');
+    expect(resolveUriIndex).toBeGreaterThan(-1);
+
+    const commentStart = gltfLoaderSource.lastIndexOf('/**', resolveUriIndex);
+    expect(commentStart).toBeGreaterThan(-1);
+
+    const commentEnd = gltfLoaderSource.indexOf('*/', commentStart);
+    expect(commentEnd).toBeGreaterThan(commentStart);
+
+    const jsdocBlock = gltfLoaderSource.slice(commentStart, commentEnd);
+    const lines = jsdocBlock.split('\n');
+
+    // Find the first non-empty content line after the opening `/**`
+    let firstContentLine: string | undefined;
+    for (let i = 1; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      // Strip leading `*` and optional following space
+      const content = trimmed.replace(/^\* ?/, '').trim();
+      if (content.length > 0) {
+        firstContentLine = content;
+        break;
+      }
+    }
+
+    expect(firstContentLine).toBeDefined();
+    expect(firstContentLine!.startsWith('@security')).toBe(true);
   });
 });

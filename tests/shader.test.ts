@@ -1043,8 +1043,12 @@ describe('ShaderCache JSDoc', () => {
   it('getProgramKey @remarks mentions calling getProgramKey before getProgram', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
     const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    const remarksBody = shaderCacheSource.slice(remarksIdx, nextParamIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('before');
     expect(remarksBody).toMatch(/\bgetProgram\b/);
   });
@@ -1052,8 +1056,12 @@ describe('ShaderCache JSDoc', () => {
   it('getProgramKey @remarks mentions eviction as the cause of key instability', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
+    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
     const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    const remarksBody = shaderCacheSource.slice(remarksIdx, nextParamIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
+    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('evicted');
   });
 

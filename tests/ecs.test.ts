@@ -1889,4 +1889,24 @@ describe('OrbitalCameraSystem', () => {
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
   });
+
+  it('maxElevationDeg setter clamps Infinity to MAX_ELEVATION_DEG and emits a console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = Infinity;
+    expect(sys.maxElevationDeg).toBe(OrbitalCameraSystem.MAX_ELEVATION_DEG);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
+    expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
+  });
+
+  it('maxElevationDeg setter clamps -Infinity to MIN_ELEVATION_DEG and emits a console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sys = new OrbitalCameraSystem();
+    sys.maxElevationDeg = -Infinity;
+    expect(sys.maxElevationDeg).toBe(OrbitalCameraSystem.MIN_ELEVATION_DEG);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
+    expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
+  });
 });

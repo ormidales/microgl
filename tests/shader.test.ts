@@ -1043,10 +1043,11 @@ describe('ShaderCache JSDoc', () => {
   it('getProgramKey @remarks mentions calling getProgramKey before getProgram', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
-    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
     const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
-    expect(nextParamIdx > remarksIdx || commentEndIdx > remarksIdx).toBe(true);
-    const endIdx = nextParamIdx > remarksIdx ? nextParamIdx : commentEndIdx;
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
+    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
     const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('before');
     expect(remarksBody).toMatch(/\bgetProgram\b/);
@@ -1055,10 +1056,11 @@ describe('ShaderCache JSDoc', () => {
   it('getProgramKey @remarks mentions eviction as the cause of key instability', () => {
     const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
     const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
-    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
     const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
-    expect(nextParamIdx > remarksIdx || commentEndIdx > remarksIdx).toBe(true);
-    const endIdx = nextParamIdx > remarksIdx ? nextParamIdx : commentEndIdx;
+    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
+    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
+    // Only use nextParamIdx when it falls within the current comment block
+    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
     const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('evicted');
   });

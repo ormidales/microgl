@@ -21,9 +21,13 @@ describe('Demo scene layout', () => {
   });
 
   it('createDemoLayout has a JSDoc block with @param and @returns tags', () => {
-    expect(layoutSource).toContain('@param title');
-    expect(layoutSource).toContain('@param controls');
-    expect(layoutSource).toContain('@returns');
+    const jsdocAndSignatureMatch = layoutSource.match(/\/\*\*[\s\S]*?\*\/\s*export function createDemoLayout/);
+    expect(jsdocAndSignatureMatch).not.toBeNull();
+
+    const jsdocBlock = jsdocAndSignatureMatch![0].replace(/export function createDemoLayout[\s\S]*$/, '');
+    expect(jsdocBlock).toContain('@param title');
+    expect(jsdocBlock).toContain('@param controls');
+    expect(jsdocBlock).toContain('@returns');
   });
 
   it('boots the gltf demo entrypoint from main', () => {

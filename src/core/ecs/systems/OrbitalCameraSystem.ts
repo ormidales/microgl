@@ -187,6 +187,13 @@ export class OrbitalCameraSystem extends System {
   // System update
   // ---------------------------------------------------------------------------
 
+  /**
+   * Apply accumulated input deltas to every `CameraComponent`, rebuild view
+   * and projection matrices when needed, then reset the delta accumulators.
+   *
+   * @param em         The entity manager used to iterate over Camera entities.
+   * @param _deltaTime Frame delta time (unused — input is event-driven).
+   */
   update(em: EntityManager, _deltaTime: number): void {
     const aspect = this.canvas ? this.canvas.width / (this.canvas.height || 1) : 1;
     const aspectChanged = aspect !== this.lastAspect;

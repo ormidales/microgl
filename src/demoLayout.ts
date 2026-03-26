@@ -5,7 +5,15 @@ export interface DemoLayout {
 }
 
 /**
- * Builds the shared DOM structure used by demo scenes.
+ * Build the shared DOM structure used by demo scenes.
+ *
+ * Clears `document.body`, injects a top bar with a back link and title,
+ * a canvas container, and a performance panel with a live FPS counter.
+ *
+ * @param title    Text displayed in the top bar heading.
+ * @param controls Optional list of control hint strings rendered below the
+ *                 FPS counter in the performance panel.
+ * @returns        References to the key DOM nodes created by this function.
  */
 export function createDemoLayout(title: string, controls: string[] = []): DemoLayout {
   document.body.classList.add('demo-page');

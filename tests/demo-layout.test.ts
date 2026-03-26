@@ -20,6 +20,12 @@ describe('Demo scene layout', () => {
     expect(layoutSource).toContain('for (const control of controls)');
   });
 
+  it('createDemoLayout has a JSDoc block with @param and @returns tags', () => {
+    expect(layoutSource).toContain('@param title');
+    expect(layoutSource).toContain('@param controls');
+    expect(layoutSource).toContain('@returns');
+  });
+
   it('boots the gltf demo entrypoint from main', () => {
     expect(mainSource).toContain("import { runGltfDemo } from './demos/gltf'");
     expect(mainSource).toContain('runGltfDemo()');

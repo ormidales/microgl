@@ -1932,4 +1932,22 @@ describe('OrbitalCameraSystem', () => {
     expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
     expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
   });
+
+  it('update() JSDoc documents both @param tags and describes the three phases', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/OrbitalCameraSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // The negative-lookahead (?!\*\/) prevents the regex from spanning across
+    // multiple JSDoc blocks, so only the comment immediately before update() matches.
+    const match = source.match(/\/\*\*((?!\*\/)[\s\S])*\*\/\s*update\(em: EntityManager/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('@param em');
+    expect(jsdoc).toContain('@param _deltaTime');
+    // The three phases must be mentioned
+    expect(jsdoc).toMatch(/deltas/i);
+    expect(jsdoc).toMatch(/matrices/i);
+    expect(jsdoc).toMatch(/reset/i);
+  });
 });

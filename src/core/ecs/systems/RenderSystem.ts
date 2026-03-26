@@ -289,8 +289,10 @@ export class RenderSystem extends System {
   }
 
   /**
-   * Clear the internal mesh-buffer cache so that GPU resources are fully
-   * reallocated on the next {@link update} call.
+   * Clear the internal mesh-buffer cache so that GPU resources are
+   * reallocated on the first {@link update} (or {@link safeUpdate}) call
+   * after the WebGL context has been restored (that is, once
+   * `renderer.isContextLost` is `false` again).
    *
    * Intended to be called as part of the WebGL context-loss lifecycle, for
    * example from `webglcontextlost` and/or `webglcontextrestored` handlers.

@@ -153,7 +153,6 @@ describe('Time reset() JSDoc', () => {
     expect(timeSource).toContain('does **not** remove the `visibilitychange` listener');
   });
 });
-});
 
 // ---------------------------------------------------------------------------
 // Time – visibilitychange integration

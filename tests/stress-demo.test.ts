@@ -22,6 +22,13 @@ describe('Stress demo', () => {
     expect(jsdoc).toContain('TURN_SPEED');
   });
 
+  it('explains intentional MeshComponent sharing and ref-counting in a comment', () => {
+    expect(stressDemoSource).toMatch(
+      /\/\/.*All entities share the same MeshComponent instance/,
+    );
+    expect(stressDemoSource).toMatch(/\/\/.*ref-count/);
+  });
+
   it('creates a large ECS scene with Transform+Mesh updates and live FPS display', () => {
     expect(stressDemoSource).toContain('const ENTITY_GRID_SIZE = 100');
     expect(stressDemoSource).toContain("public readonly requiredComponents = ['Transform', 'Mesh'] as const");

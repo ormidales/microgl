@@ -1940,7 +1940,9 @@ describe('OrbitalCameraSystem', () => {
     );
     const match = source.match(/\/\*\*[\s\S]*?\*\/\s*update\(em: EntityManager/);
     expect(match).not.toBeNull();
-    const jsdoc = match![0];
+    const fullMatch = match![0];
+    const endOfComment = fullMatch.indexOf('*/');
+    const jsdoc = endOfComment === -1 ? fullMatch : fullMatch.slice(0, endOfComment + 2);
     expect(jsdoc).toContain('@param em');
     expect(jsdoc).toContain('@param _deltaTime');
     // The three phases must be mentioned

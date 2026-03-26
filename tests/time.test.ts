@@ -150,9 +150,9 @@ describe('Time reset() JSDoc', () => {
   });
 
   it('notes that the visibilitychange listener is unaffected by reset()', () => {
-    expect(timeSource).toContain('visibilitychange');
-    expect(timeSource).toContain('{@link dispose}');
+    expect(timeSource).toContain('does **not** remove the `visibilitychange` listener');
   });
+});
 });
 
 // ---------------------------------------------------------------------------

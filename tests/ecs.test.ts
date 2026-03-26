@@ -465,6 +465,29 @@ describe('EntityManager', () => {
 });
 
 // ---------------------------------------------------------------------------
+// MeshComponent JSDoc
+// ---------------------------------------------------------------------------
+
+describe('MeshComponent JSDoc', () => {
+  const source = readFileSync(
+    new URL('../src/core/ecs/components/MeshComponent.ts', import.meta.url),
+    'utf8',
+  );
+
+  it('dispose() JSDoc lists all six fields that are reset', () => {
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*dispose\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('vertices');
+    expect(jsdoc).toContain('indices');
+    expect(jsdoc).toContain('normals');
+    expect(jsdoc).toContain('uvs');
+    expect(jsdoc).toContain('min');
+    expect(jsdoc).toContain('max');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // TransformComponent JSDoc
 // ---------------------------------------------------------------------------
 

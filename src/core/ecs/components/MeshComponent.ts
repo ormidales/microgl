@@ -20,8 +20,10 @@ export class MeshComponent implements Component {
   ) {}
 
   /**
-   * Release internal typed-array references so that large geometry buffers
-   * can be collected by the GC as soon as the owning entity is destroyed.
+   * Release internal typed-array references and reset bounding-box data so
+   * that large geometry buffers can be collected by the GC as soon as the
+   * owning entity is destroyed. Resets `vertices`, `indices`, `normals`,
+   * `uvs`, `min`, and `max` to their empty defaults.
    * Called automatically by {@link EntityManager.destroyEntity}.
    */
   dispose(): void {

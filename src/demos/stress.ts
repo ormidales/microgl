@@ -19,6 +19,15 @@ const MOVE_SPEED = 1.3;
 const TURN_SPEED = 0.6;
 const POSITION_OFFSET_STEP = 0.19;
 
+/**
+ * Animates every entity that owns a `Transform` and a `Mesh` component by
+ * applying a sinusoidal Y-offset and a continuous Y-axis rotation each frame.
+ *
+ * The internal `phase` accumulator advances at {@link MOVE_SPEED} rad/s and is
+ * offset per entity using {@link POSITION_OFFSET_STEP} so that neighbouring
+ * entities appear to ripple rather than move in unison, while the Y-axis
+ * rotation speed is controlled by {@link TURN_SPEED} (radians per second).
+ */
 class StressMovementSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
   private phase = 0;
@@ -73,6 +82,9 @@ export function runStressDemo(): void {
   entityCountLabel.textContent = `Entities: ${ENTITY_GRID_SIZE * ENTITY_GRID_SIZE}`;
   layout.performancePanel.append(entityCountLabel);
 
+  // All entities share the same MeshComponent instance — geometry is identical
+  // and EntityManager ref-counts the instance, so it is disposed when the last
+  // reference to it is removed (for example, when the last owning entity is destroyed).
   const mesh = new MeshComponent(createTriangleVertices());
   const half = ENTITY_GRID_SIZE * ENTITY_SPACING * 0.5;
   for (let row = 0; row < ENTITY_GRID_SIZE; row++) {

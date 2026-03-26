@@ -288,7 +288,21 @@ export class RenderSystem extends System {
     }
   }
 
-  /** Drop cached VAO metadata so buffers are rebuilt on next draw after context restoration. */
+  /**
+   * Clear the internal mesh-buffer cache so that GPU resources are
+   * reallocated on the first {@link update} (or {@link safeUpdate}) call
+   * after the WebGL context has been restored (that is, once
+   * `renderer.isContextLost` is `false` again).
+   *
+   * Intended to be called as part of the WebGL context-loss lifecycle, for
+   * example from `webglcontextlost` and/or `webglcontextrestored` handlers.
+   * Do **not** call `gl.delete*` before invoking this method — the WebGL spec
+   * states that all GPU handles are already invalidated when context is lost,
+   * and calling delete on invalidated handles is undefined behaviour.
+   *
+   * @see {@link flushStaleMeshBuffers} for releasing buffers of destroyed entities
+   *      while the render loop is paused (without context loss).
+   */
   resetGpuResources(): void {
     // Do not call gl.delete* here — WebGL context loss already invalidates all GPU
     // handles, so calling delete on them is undefined behaviour per the WebGL spec.

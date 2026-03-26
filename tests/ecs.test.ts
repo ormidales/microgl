@@ -438,6 +438,20 @@ describe('EntityManager', () => {
     expect((em as any).viewKeysByComponentType.size).toBe(0);
   });
 
+  it('clearEmptyViews JSDoc contains @example block with post-level-generation use case and render-loop warning', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/EntityManager.ts', import.meta.url),
+      'utf8',
+    );
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*clearEmptyViews\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('@example');
+    expect(jsdoc).toContain('generateLevel');
+    expect(jsdoc).toContain('em.clearEmptyViews');
+    expect(jsdoc).toMatch(/render loop/i);
+  });
+
   it('addComponent JSDoc documents ref-counting and same-instance no-op behaviour', () => {
     const source = readFileSync(
       new URL('../src/core/ecs/EntityManager.ts', import.meta.url),
@@ -461,6 +475,29 @@ describe('EntityManager', () => {
     expect(removeComponentJsdoc).toContain('reference count');
     expect(removeComponentJsdoc).toContain('disposed');
     expect(removeComponentJsdoc).toContain('no-op');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// MeshComponent JSDoc
+// ---------------------------------------------------------------------------
+
+describe('MeshComponent JSDoc', () => {
+  const source = readFileSync(
+    new URL('../src/core/ecs/components/MeshComponent.ts', import.meta.url),
+    'utf8',
+  );
+
+  it('dispose() JSDoc lists all six fields that are reset', () => {
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*dispose\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('vertices');
+    expect(jsdoc).toContain('indices');
+    expect(jsdoc).toContain('normals');
+    expect(jsdoc).toContain('uvs');
+    expect(jsdoc).toContain('min');
+    expect(jsdoc).toContain('max');
   });
 });
 
@@ -1246,6 +1283,19 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
     expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
   });
+
+  it('resetGpuResources JSDoc warns against gl.delete* and references flushStaleMeshBuffers', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*resetGpuResources\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toMatch(/gl\.delete/);
+    expect(jsdoc).toContain('flushStaleMeshBuffers');
+    expect(jsdoc).toMatch(/webglcontextrestored/i);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1908,5 +1958,23 @@ describe('OrbitalCameraSystem', () => {
     expect(warnSpy).toHaveBeenCalledOnce();
     expect(warnSpy.mock.calls[0][0]).toContain('OrbitalCameraSystem');
     expect(warnSpy.mock.calls[0][0]).toContain(`[${OrbitalCameraSystem.MIN_ELEVATION_DEG}, ${OrbitalCameraSystem.MAX_ELEVATION_DEG}]`);
+  });
+
+  it('update() JSDoc documents both @param tags and describes the three phases', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/OrbitalCameraSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // The negative-lookahead (?!\*\/) prevents the regex from spanning across
+    // multiple JSDoc blocks, so only the comment immediately before update() matches.
+    const match = source.match(/\/\*\*((?!\*\/)[\s\S])*\*\/\s*update\(em: EntityManager/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('@param em');
+    expect(jsdoc).toContain('@param _deltaTime');
+    // The three phases must be mentioned
+    expect(jsdoc).toMatch(/deltas/i);
+    expect(jsdoc).toMatch(/matrices/i);
+    expect(jsdoc).toMatch(/reset/i);
   });
 });

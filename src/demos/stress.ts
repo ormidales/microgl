@@ -83,8 +83,8 @@ export function runStressDemo(): void {
   layout.performancePanel.append(entityCountLabel);
 
   // All entities share the same MeshComponent instance — geometry is identical
-  // and EntityManager ref-counts the instance, so it is disposed only after the
-  // last entity that holds it is destroyed.
+  // and EntityManager ref-counts the instance, so it is disposed when the last
+  // reference to it is removed (for example, when the last owning entity is destroyed).
   const mesh = new MeshComponent(createTriangleVertices());
   const half = ENTITY_GRID_SIZE * ENTITY_SPACING * 0.5;
   for (let row = 0; row < ENTITY_GRID_SIZE; row++) {

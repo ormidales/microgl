@@ -25,7 +25,8 @@ const POSITION_OFFSET_STEP = 0.19;
  *
  * The internal `phase` accumulator advances at {@link MOVE_SPEED} rad/s and is
  * offset per entity using {@link POSITION_OFFSET_STEP} so that neighbouring
- * entities appear to ripple rather than move in unison.
+ * entities appear to ripple rather than move in unison, while the Y-axis
+ * rotation speed is controlled by {@link TURN_SPEED} (radians per second).
  */
 class StressMovementSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;

@@ -97,6 +97,10 @@ export class Time {
    * restarts from 0. This prevents a large `deltaTime` spike caused by the
    * time elapsed during a pause or WebGL context loss.
    *
+   * Note: this method does **not** remove the `visibilitychange` listener
+   * registered by the constructor. Call {@link dispose} when the `Time`
+   * instance is permanently torn down.
+   *
    * @example
    * renderer.onContextRestored((gl) => {
    *   time.reset(); // avoid a large deltaTime on the first restored frame

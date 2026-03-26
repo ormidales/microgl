@@ -148,6 +148,11 @@ describe('Time reset() JSDoc', () => {
     expect(timeSource).toContain('time.reset()');
     expect(timeSource).toContain('requestAnimationFrame');
   });
+
+  it('notes that the visibilitychange listener is unaffected by reset()', () => {
+    expect(timeSource).toContain('visibilitychange');
+    expect(timeSource).toContain('{@link dispose}');
+  });
 });
 
 // ---------------------------------------------------------------------------

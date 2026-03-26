@@ -438,6 +438,20 @@ describe('EntityManager', () => {
     expect((em as any).viewKeysByComponentType.size).toBe(0);
   });
 
+  it('clearEmptyViews JSDoc contains @example block with post-level-generation use case and render-loop warning', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/EntityManager.ts', import.meta.url),
+      'utf8',
+    );
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*clearEmptyViews\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toContain('@example');
+    expect(jsdoc).toContain('generateLevel');
+    expect(jsdoc).toContain('em.clearEmptyViews');
+    expect(jsdoc).toMatch(/render loop/i);
+  });
+
   it('addComponent JSDoc documents ref-counting and same-instance no-op behaviour', () => {
     const source = readFileSync(
       new URL('../src/core/ecs/EntityManager.ts', import.meta.url),

@@ -268,9 +268,15 @@ export class EntityManager {
   /**
    * Remove all cached views that currently contain no entities.
    *
-   * Call this after a batch of one-off `getEntitiesWith` queries (e.g.
-   * procedurally generated component-type combinations) to prevent the
-   * internal view cache from growing without bound.
+   * Call this after a batch of one-off `getEntitiesWith` queries to prevent
+   * the internal view cache from growing without bound. Do **not** call this
+   * inside the render loop — view creation has a one-time cost that amortises
+   * across frames.
+   *
+   * @example
+   * // After procedural level generation that queried many ad-hoc component sets:
+   * generateLevel(em);
+   * em.clearEmptyViews();
    */
   clearEmptyViews(): void {
     for (const [key, view] of [...this.views]) {

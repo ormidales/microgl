@@ -19,6 +19,14 @@ const MOVE_SPEED = 1.3;
 const TURN_SPEED = 0.6;
 const POSITION_OFFSET_STEP = 0.19;
 
+/**
+ * Animates every entity that owns a `Transform` and a `Mesh` component by
+ * applying a sinusoidal Y-offset and a continuous Y-axis rotation each frame.
+ *
+ * The internal `phase` accumulator advances at {@link MOVE_SPEED} rad/s and is
+ * offset per entity using {@link POSITION_OFFSET_STEP} so that neighbouring
+ * entities appear to ripple rather than move in unison.
+ */
 class StressMovementSystem extends System {
   public readonly requiredComponents = ['Transform', 'Mesh'] as const;
   private phase = 0;

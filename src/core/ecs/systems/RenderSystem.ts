@@ -292,10 +292,11 @@ export class RenderSystem extends System {
    * Clear the internal mesh-buffer cache so that GPU resources are fully
    * reallocated on the next {@link update} call.
    *
-   * **Must be called after a `webglcontextrestored` event.** Do **not** call
-   * `gl.delete*` before invoking this method — the WebGL spec states that all
-   * GPU handles are already invalidated when context is lost, and calling delete
-   * on invalidated handles is undefined behaviour.
+   * Intended to be called as part of the WebGL context-loss lifecycle, for
+   * example from `webglcontextlost` and/or `webglcontextrestored` handlers.
+   * Do **not** call `gl.delete*` before invoking this method — the WebGL spec
+   * states that all GPU handles are already invalidated when context is lost,
+   * and calling delete on invalidated handles is undefined behaviour.
    *
    * @see {@link flushStaleMeshBuffers} for releasing buffers of destroyed entities
    *      while the render loop is paused (without context loss).

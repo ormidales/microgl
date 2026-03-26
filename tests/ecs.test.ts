@@ -1283,6 +1283,19 @@ describe('RenderSystem', () => {
     sys.update(em, 0.016);
     expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
   });
+
+  it('resetGpuResources JSDoc warns against gl.delete* and references flushStaleMeshBuffers', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    const match = source.match(/\/\*\*[\s\S]*?\*\/\s*resetGpuResources\(\)/);
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    expect(jsdoc).toMatch(/gl\.delete/);
+    expect(jsdoc).toContain('flushStaleMeshBuffers');
+    expect(jsdoc).toMatch(/webglcontextrestored/i);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -448,7 +448,7 @@ describe('EntityManager', () => {
     const jsdoc = match![0];
     expect(jsdoc).toContain('@example');
     expect(jsdoc).toContain('generateLevel');
-    expect(jsdoc).toContain('clearEmptyViews');
+    expect(jsdoc).toContain('em.clearEmptyViews');
     expect(jsdoc).toMatch(/render loop/i);
   });
 

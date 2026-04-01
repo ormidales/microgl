@@ -178,6 +178,8 @@ export interface GltfLoaderOptions {
    * underscores (`_`), and forward slashes (`/`), and must not exceed 2048
    * characters (checked on both the raw and percent-decoded forms). Any other
    * character or excessive length triggers an error.
+   *
+   * @remarks
    * Baseline protections (blocking absolute/protocol URIs, leading slashes,
    * backslashes, `..` segments, and any URI containing null bytes in either
    * the raw or percent-decoded form) are always active regardless of this flag.

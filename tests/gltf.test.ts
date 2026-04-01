@@ -2316,6 +2316,13 @@ describe('GltfLoaderOptions JSDoc', () => {
     it('lists null bytes in baseline protections', () => {
       expect(strictJsDoc).toContain('null bytes');
     });
+
+    it('documents baseline protections in a @remarks block', () => {
+      const remarksIndex = strictJsDoc.indexOf('@remarks');
+      expect(remarksIndex).toBeGreaterThan(-1);
+      const baselineIndex = strictJsDoc.indexOf('always active regardless of this flag');
+      expect(baselineIndex).toBeGreaterThan(remarksIndex);
+    });
   });
 
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {

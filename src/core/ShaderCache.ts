@@ -6,7 +6,12 @@
 import { createShader, createProgram } from './ShaderUtils';
 
 export class ShaderCache {
-  /** Maximum allowed length (in characters) for an explicit cache key. */
+  /**
+   * Hard upper bound on the character length of any explicit cache key
+   * supplied by the caller. Keeps `Map` key memory predictable and avoids
+   * accidental use of full GLSL source strings as keys (which can be several
+   * hundred kilobytes).
+   */
   static readonly MAX_KEY_LENGTH = 512;
 
   private static readonly FNV1A_OFFSET_BASIS = 0x811c9dc5;

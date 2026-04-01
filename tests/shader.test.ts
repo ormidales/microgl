@@ -1071,4 +1071,34 @@ describe('ShaderCache JSDoc', () => {
     expect(shaderCacheSource.indexOf('cache.retainProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
     expect(shaderCacheSource.indexOf('cache.releaseProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
   });
+
+  it('MAX_KEY_LENGTH has a JSDoc comment', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    // The JSDoc comment block must appear immediately before the declaration
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    expect(commentEnd).toBeGreaterThan(-1);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    expect(commentStart).toBeGreaterThan(-1);
+    expect(commentStart).toBeLessThan(commentEnd);
+  });
+
+  it('MAX_KEY_LENGTH JSDoc mentions memory as a rationale', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    expect(commentBody).toMatch(/memory/i);
+  });
+
+  it('MAX_KEY_LENGTH JSDoc mentions misuse prevention (GLSL source as key)', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    // Should mention GLSL source strings being misused as keys
+    expect(commentBody).toMatch(/GLSL.*source/i);
+  });
 });

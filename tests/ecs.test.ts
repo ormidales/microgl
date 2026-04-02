@@ -1128,6 +1128,28 @@ describe('RenderSystem', () => {
     expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
   });
 
+  it('flushStaleMeshBuffers JSDoc includes a @param em tag', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the method signature
+    const jsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*flushStaleMeshBuffers\(/);
+    expect(jsdocMatch).not.toBeNull();
+    expect(jsdocMatch![0]).toContain('@param em');
+  });
+
+  it('flushStaleMeshBuffers JSDoc includes a @returns tag', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the method signature
+    const jsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*flushStaleMeshBuffers\(/);
+    expect(jsdocMatch).not.toBeNull();
+    expect(jsdocMatch![0]).toContain('@returns');
+  });
+
   it('constructor JSDoc documents all three @param tags', () => {
     const source = readFileSync(
       new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
@@ -1282,6 +1304,26 @@ describe('RenderSystem', () => {
     // After reset the cache is empty, so the next draw must reallocate
     sys.update(em, 0.016);
     expect(gl.createVertexArray).toHaveBeenCalledTimes(2);
+  });
+
+  it('CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD JSDoc states unit is consecutive frames, documents reset behavior, and preserves rationale', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the constant declaration
+    const match = source.match(
+      /\/\*\*[\s\S]*?\*\/\s*const CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD/,
+    );
+    expect(match).not.toBeNull();
+    const jsdoc = match![0];
+    // Unit must be stated as consecutive update() frames
+    expect(jsdoc).toMatch(/consecutive/i);
+    expect(jsdoc).toMatch(/update\(\)/);
+    // Reset behavior on successful allocation must be documented
+    expect(jsdoc).toMatch(/resets? to 0/i);
+    // Rationale for the value of 2 must be preserved
+    expect(jsdoc).toMatch(/single[\s-]frame|transient/i);
   });
 
   it('resetGpuResources JSDoc warns against gl.delete* and references flushStaleMeshBuffers', () => {

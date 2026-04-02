@@ -6,6 +6,7 @@ import {
   readAccessorFloat,
   readAccessorIndices,
   buildNodeLocalMatrix,
+  wrapGltfError,
 } from '../src/core/GltfLoader';
 import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset, GltfComponentType } from '../src/core/GltfTypes';
@@ -650,6 +651,37 @@ describe('readAccessorFloat', () => {
 describe('GltfLoader module exports', () => {
   it('does not expose deprecated readAccessorUint16 export', () => {
     expect('readAccessorUint16' in GltfLoaderModule).toBe(false);
+  });
+
+  it('exports wrapGltfError', () => {
+    expect('wrapGltfError' in GltfLoaderModule).toBe(true);
+    expect(typeof GltfLoaderModule.wrapGltfError).toBe('function');
+  });
+});
+
+describe('wrapGltfError', () => {
+  it('returns an Error with prefix and cause message', () => {
+    const cause = new Error('original');
+    const wrapped = wrapGltfError('context', cause);
+    expect(wrapped).toBeInstanceOf(Error);
+    expect(wrapped.message).toBe('context: original');
+  });
+
+  it('attaches cause when cause is an Error', () => {
+    const cause = new Error('inner');
+    const wrapped = wrapGltfError('prefix', cause);
+    expect((wrapped as Error & { cause?: Error }).cause).toBe(cause);
+  });
+
+  it('wraps a non-Error thrown value using String()', () => {
+    const wrapped = wrapGltfError('ctx', 'some string');
+    expect(wrapped.message).toBe('ctx: some string');
+    expect((wrapped as Error & { cause?: Error }).cause).toBeUndefined();
+  });
+
+  it('wraps a numeric thrown value', () => {
+    const wrapped = wrapGltfError('ctx', 42);
+    expect(wrapped.message).toBe('ctx: 42');
   });
 });
 
@@ -2316,6 +2348,13 @@ describe('GltfLoaderOptions JSDoc', () => {
     it('lists null bytes in baseline protections', () => {
       expect(strictJsDoc).toContain('null bytes');
     });
+
+    it('documents baseline protections in a @remarks block', () => {
+      const remarksIndex = strictJsDoc.indexOf('@remarks');
+      expect(remarksIndex).toBeGreaterThan(-1);
+      const baselineIndex = strictJsDoc.indexOf('always active regardless of this flag');
+      expect(baselineIndex).toBeGreaterThan(remarksIndex);
+    });
   });
 
   it('resolveUri JSDoc warns consumers not to perform additional URI resolution', () => {
@@ -2324,6 +2363,24 @@ describe('GltfLoaderOptions JSDoc', () => {
 
   it('resolveUri JSDoc documents that the URI is percent-decoded before being passed', () => {
     expect(gltfLoaderSource).toContain('percent-decoded');
+  });
+
+  it('resolveUri JSDoc explicitly states the callback must return a Promise', () => {
+    expect(gltfLoaderSource).toContain('must** return a `Promise`');
+  });
+
+  it('resolveUri JSDoc documents that rejections propagate from loadGltf', () => {
+    expect(gltfLoaderSource).toContain('Rejections propagate directly from `loadGltf`');
+  });
+
+  it('resolveUri JSDoc has a @param uri tag', () => {
+    const resolveUriJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'resolveUri?:');
+    expect(resolveUriJsDoc).toContain('@param uri');
+  });
+
+  it('resolveUri JSDoc has a @returns tag', () => {
+    const resolveUriJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'resolveUri?:');
+    expect(resolveUriJsDoc).toContain('@returns');
   });
 
   it('resolveUri JSDoc has @security tag at the top of the comment block', () => {
@@ -2353,5 +2410,17 @@ describe('GltfLoaderOptions JSDoc', () => {
 
     expect(firstContentLine).toBeDefined();
     expect(firstContentLine!.startsWith('@security')).toBe(true);
+  });
+});
+
+describe('wrapGltfError JSDoc', () => {
+  it('JSDoc documents the prefix parameter', () => {
+    const jsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'export function wrapGltfError(');
+    expect(jsDoc).toContain('@param prefix');
+  });
+
+  it('JSDoc documents the cause parameter', () => {
+    const jsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'export function wrapGltfError(');
+    expect(jsDoc).toContain('@param cause');
   });
 });

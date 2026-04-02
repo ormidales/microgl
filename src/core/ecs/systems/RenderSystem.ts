@@ -8,10 +8,13 @@ import type { MeshComponent } from '../components/MeshComponent';
 import type { CameraComponent } from '../components/CameraComponent';
 
 /**
- * Number of consecutive GPU mesh-buffer allocation failures that must occur
- * before RenderSystem logs a degraded-rendering warning.
- * A threshold of 2 avoids false positives caused by a single transient
- * WebGL context interruption while still catching persistent GPU memory pressure.
+ * Number of **consecutive** `update()` frames on which GPU mesh-buffer
+ * allocation must fail before `RenderSystem` fires the
+ * `onMeshBufferAllocationFailure` callback.
+ *
+ * A value of 2 filters out single-frame WebGL context interruptions while
+ * still detecting persistent GPU memory pressure.
+ * The counter resets to 0 after any successful mesh-buffer allocation.
  */
 const CONSECUTIVE_MESH_BUFFER_FAILURE_WARNING_THRESHOLD = 2;
 
@@ -265,6 +268,8 @@ export class RenderSystem extends System {
    * When the loop is running, `update()` (or `safeUpdate()`) performs the same
    * cleanup automatically at the end of every frame.
    *
+   * @param em The entity manager whose active entities are checked.
+   * @returns void
    * @example
    * // Destroy a batch of entities and immediately free their GPU buffers
    * // while the render loop is suspended:

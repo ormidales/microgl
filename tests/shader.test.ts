@@ -1036,32 +1036,40 @@ describe('Default shader sources', () => {
 
 describe('ShaderCache JSDoc', () => {
   it('getProgramKey has a @remarks block documenting key-stability expectations', () => {
-    const remarksIdx = shaderCacheSource.indexOf('@remarks', shaderCacheSource.indexOf('getProgramKey'));
-    expect(remarksIdx).toBeGreaterThan(-1);
+    const methodSigIdx = shaderCacheSource.indexOf('getProgramKey(vertexSource');
+    expect(methodSigIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', methodSigIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    expect(commentBody.indexOf('@remarks')).toBeGreaterThan(-1);
   });
 
   it('getProgramKey @remarks mentions calling getProgramKey before getProgram', () => {
-    const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
-    const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
-    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
-    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
-    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    // Only use nextParamIdx when it falls within the current comment block
-    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
-    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
+    const methodSigIdx = shaderCacheSource.indexOf('getProgramKey(vertexSource');
+    expect(methodSigIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', methodSigIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    const remarksIdx = commentBody.indexOf('@remarks');
+    expect(remarksIdx).toBeGreaterThan(-1);
+    const nextParamIdx = commentBody.indexOf('@param', remarksIdx);
+    const endIdx = nextParamIdx !== -1 ? nextParamIdx : commentBody.length;
+    const remarksBody = commentBody.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('before');
     expect(remarksBody).toMatch(/\bgetProgram\b/);
   });
 
   it('getProgramKey @remarks mentions eviction as the cause of key instability', () => {
-    const getProgramKeyIdx = shaderCacheSource.indexOf('getProgramKey');
-    const remarksIdx = shaderCacheSource.indexOf('@remarks', getProgramKeyIdx);
-    const commentEndIdx = shaderCacheSource.indexOf('*/', remarksIdx);
-    expect(commentEndIdx).toBeGreaterThan(remarksIdx);
-    const nextParamIdx = shaderCacheSource.indexOf('@param', remarksIdx);
-    // Only use nextParamIdx when it falls within the current comment block
-    const endIdx = (nextParamIdx !== -1 && nextParamIdx < commentEndIdx) ? nextParamIdx : commentEndIdx;
-    const remarksBody = shaderCacheSource.slice(remarksIdx, endIdx);
+    const methodSigIdx = shaderCacheSource.indexOf('getProgramKey(vertexSource');
+    expect(methodSigIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', methodSigIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    const remarksIdx = commentBody.indexOf('@remarks');
+    expect(remarksIdx).toBeGreaterThan(-1);
+    const nextParamIdx = commentBody.indexOf('@param', remarksIdx);
+    const endIdx = nextParamIdx !== -1 ? nextParamIdx : commentBody.length;
+    const remarksBody = commentBody.slice(remarksIdx, endIdx);
     expect(remarksBody).toContain('evicted');
   });
 
@@ -1070,5 +1078,57 @@ describe('ShaderCache JSDoc', () => {
     expect(exampleIdx).toBeGreaterThan(-1);
     expect(shaderCacheSource.indexOf('cache.retainProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
     expect(shaderCacheSource.indexOf('cache.releaseProgram(key)', exampleIdx)).toBeGreaterThan(exampleIdx);
+  });
+
+  it('getProgramKey JSDoc has a @see tag pointing to getProgram', () => {
+    const methodSigIdx = shaderCacheSource.indexOf('getProgramKey(vertexSource');
+    expect(methodSigIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', methodSigIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    expect(commentBody).toContain('@see getProgram');
+  });
+
+  it('getProgramKey @remarks appears before @param tags', () => {
+    const methodSigIdx = shaderCacheSource.indexOf('getProgramKey(vertexSource');
+    expect(methodSigIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', methodSigIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    const remarksPos = commentBody.indexOf('@remarks');
+    const paramPos = commentBody.indexOf('@param');
+    expect(remarksPos).toBeGreaterThan(-1);
+    expect(paramPos).toBeGreaterThan(-1);
+    expect(remarksPos).toBeLessThan(paramPos);
+  });
+
+  it('MAX_KEY_LENGTH has a JSDoc comment', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    // The JSDoc comment block must appear immediately before the declaration
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    expect(commentEnd).toBeGreaterThan(-1);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    expect(commentStart).toBeGreaterThan(-1);
+    expect(commentStart).toBeLessThan(commentEnd);
+  });
+
+  it('MAX_KEY_LENGTH JSDoc mentions memory as a rationale', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    expect(commentBody).toMatch(/memory/i);
+  });
+
+  it('MAX_KEY_LENGTH JSDoc mentions misuse prevention (GLSL source as key)', () => {
+    const maxKeyIdx = shaderCacheSource.indexOf('MAX_KEY_LENGTH');
+    expect(maxKeyIdx).toBeGreaterThan(-1);
+    const commentEnd = shaderCacheSource.lastIndexOf('*/', maxKeyIdx);
+    const commentStart = shaderCacheSource.lastIndexOf('/**', commentEnd);
+    const commentBody = shaderCacheSource.slice(commentStart, commentEnd);
+    // Should mention GLSL source strings being misused as keys
+    expect(commentBody).toMatch(/GLSL.*source/i);
   });
 });

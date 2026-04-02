@@ -1128,6 +1128,28 @@ describe('RenderSystem', () => {
     expect(source).toMatch(/@example[\s\S]*?flushStaleMeshBuffers\(em: EntityManager\)/);
   });
 
+  it('flushStaleMeshBuffers JSDoc includes a @param em tag', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the method signature
+    const jsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*flushStaleMeshBuffers\(/);
+    expect(jsdocMatch).not.toBeNull();
+    expect(jsdocMatch![0]).toContain('@param em');
+  });
+
+  it('flushStaleMeshBuffers JSDoc includes a @returns tag', () => {
+    const source = readFileSync(
+      new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),
+      'utf8',
+    );
+    // Narrow to the JSDoc block immediately preceding the method signature
+    const jsdocMatch = source.match(/\/\*\*[\s\S]*?\*\/\s*flushStaleMeshBuffers\(/);
+    expect(jsdocMatch).not.toBeNull();
+    expect(jsdocMatch![0]).toContain('@returns');
+  });
+
   it('constructor JSDoc documents all three @param tags', () => {
     const source = readFileSync(
       new URL('../src/core/ecs/systems/RenderSystem.ts', import.meta.url),

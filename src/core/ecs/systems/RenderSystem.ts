@@ -268,6 +268,8 @@ export class RenderSystem extends System {
    * When the loop is running, `update()` (or `safeUpdate()`) performs the same
    * cleanup automatically at the end of every frame.
    *
+   * @param em The entity manager whose active entities are checked.
+   * @returns void
    * @example
    * // Destroy a batch of entities and immediately free their GPU buffers
    * // while the render loop is suspended:

@@ -247,10 +247,22 @@ export class ShaderCache {
   }
 
   /**
-   * Return the cache key that `getProgram` uses (or would use) for the given
-   * source pair. Use this to obtain the key for auto-keyed programs (i.e.
+   * Return the cache key that {@link getProgram} uses (or would use) for the
+   * given source pair. Use this to obtain the key for auto-keyed programs (i.e.
    * those where `key` was omitted in the `getProgram` call) before calling
    * `retainProgram` or `releaseProgram`.
+   *
+   * @remarks
+   * Always call `getProgramKey` **before** {@link getProgram} (or immediately
+   * after, while the program is still cached) to guarantee the returned key
+   * matches the slot actually used. In the rare case of a hash collision, the
+   * resolved composite key (`primary:secondary`) is stable for the lifetime of
+   * the cached entry, but may differ from what a later call would return if the
+   * entry has been evicted.
+   *
+   * @see getProgram
+   * @see retainProgram
+   * @see releaseProgram
    *
    * ```ts
    * const key = cache.getProgramKey(vertSrc, fragSrc);
@@ -259,14 +271,6 @@ export class ShaderCache {
    * // … later …
    * cache.releaseProgram(key);
    * ```
-   *
-   * @remarks
-   * Always call `getProgramKey` **before** `getProgram` (or immediately after,
-   * while the program is still cached) to guarantee the returned key matches the
-   * slot actually used. In the rare case of a hash collision, the resolved
-   * composite key (`primary:secondary`) is stable for the lifetime of the cached
-   * entry, but may differ from what a later call would return if the entry has
-   * been evicted.
    *
    * @param vertexSource GLSL vertex shader source
    * @param fragmentSource GLSL fragment shader source

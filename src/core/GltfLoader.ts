@@ -237,10 +237,13 @@ export async function loadGltf(
 }
 
 /**
- * Wrap an unknown caught value in a new Error with a descriptive prefix,
- * attaching the original as `cause` when it is an Error instance.
+ * Wrap an unknown caught value in a new `Error` with a descriptive prefix,
+ * attaching the original as `cause` when it is an `Error` instance.
+ *
+ * @param prefix  Human-readable context prepended to the error message.
+ * @param cause   The original thrown value.
  */
-function wrapGltfError(prefix: string, cause: unknown): Error {
+export function wrapGltfError(prefix: string, cause: unknown): Error {
   const msg = cause instanceof Error ? cause.message : String(cause);
   const wrapped = new Error(`${prefix}: ${msg}`);
   if (cause instanceof Error) (wrapped as Error & { cause?: Error }).cause = cause;

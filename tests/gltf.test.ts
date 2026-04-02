@@ -6,6 +6,7 @@ import {
   readAccessorFloat,
   readAccessorIndices,
   buildNodeLocalMatrix,
+  wrapGltfError,
 } from '../src/core/GltfLoader';
 import * as GltfLoaderModule from '../src/core/GltfLoader';
 import type { GltfAsset, GltfComponentType } from '../src/core/GltfTypes';
@@ -650,6 +651,37 @@ describe('readAccessorFloat', () => {
 describe('GltfLoader module exports', () => {
   it('does not expose deprecated readAccessorUint16 export', () => {
     expect('readAccessorUint16' in GltfLoaderModule).toBe(false);
+  });
+
+  it('exports wrapGltfError', () => {
+    expect('wrapGltfError' in GltfLoaderModule).toBe(true);
+    expect(typeof GltfLoaderModule.wrapGltfError).toBe('function');
+  });
+});
+
+describe('wrapGltfError', () => {
+  it('returns an Error with prefix and cause message', () => {
+    const cause = new Error('original');
+    const wrapped = wrapGltfError('context', cause);
+    expect(wrapped).toBeInstanceOf(Error);
+    expect(wrapped.message).toBe('context: original');
+  });
+
+  it('attaches cause when cause is an Error', () => {
+    const cause = new Error('inner');
+    const wrapped = wrapGltfError('prefix', cause);
+    expect((wrapped as Error & { cause?: Error }).cause).toBe(cause);
+  });
+
+  it('wraps a non-Error thrown value using String()', () => {
+    const wrapped = wrapGltfError('ctx', 'some string');
+    expect(wrapped.message).toBe('ctx: some string');
+    expect((wrapped as Error & { cause?: Error }).cause).toBeUndefined();
+  });
+
+  it('wraps a numeric thrown value', () => {
+    const wrapped = wrapGltfError('ctx', 42);
+    expect(wrapped.message).toBe('ctx: 42');
   });
 });
 
@@ -2360,5 +2392,17 @@ describe('GltfLoaderOptions JSDoc', () => {
 
     expect(firstContentLine).toBeDefined();
     expect(firstContentLine!.startsWith('@security')).toBe(true);
+  });
+});
+
+describe('wrapGltfError JSDoc', () => {
+  it('JSDoc documents the prefix parameter', () => {
+    const jsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'export function wrapGltfError(');
+    expect(jsDoc).toContain('@param prefix');
+  });
+
+  it('JSDoc documents the cause parameter', () => {
+    const jsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'export function wrapGltfError(');
+    expect(jsDoc).toContain('@param cause');
   });
 });

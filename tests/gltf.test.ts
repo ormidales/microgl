@@ -2365,6 +2365,24 @@ describe('GltfLoaderOptions JSDoc', () => {
     expect(gltfLoaderSource).toContain('percent-decoded');
   });
 
+  it('resolveUri JSDoc explicitly states the callback must return a Promise', () => {
+    expect(gltfLoaderSource).toContain('must** return a `Promise`');
+  });
+
+  it('resolveUri JSDoc documents that rejections propagate from loadGltf', () => {
+    expect(gltfLoaderSource).toContain('Rejections propagate directly from `loadGltf`');
+  });
+
+  it('resolveUri JSDoc has a @param uri tag', () => {
+    const resolveUriJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'resolveUri?:');
+    expect(resolveUriJsDoc).toContain('@param uri');
+  });
+
+  it('resolveUri JSDoc has a @returns tag', () => {
+    const resolveUriJsDoc = extractPrecedingJsDoc(gltfLoaderSource, 'resolveUri?:');
+    expect(resolveUriJsDoc).toContain('@returns');
+  });
+
   it('resolveUri JSDoc has @security tag at the top of the comment block', () => {
     const resolveUriIndex = gltfLoaderSource.indexOf('resolveUri?:');
     expect(resolveUriIndex).toBeGreaterThan(-1);

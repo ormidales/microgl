@@ -130,12 +130,20 @@ export interface GltfLoaderOptions {
    * @security Never perform additional URI decoding or resolution inside this callback.
    * The loader has already validated and best-effort percent-decoded the URI;
    * re-decoding may re-introduce path-traversal or SSRF vulnerabilities.
-   * If percent-decoding fails due to invalid percent-encoding, the original URI string
-   * (with invalid sequences preserved) may be passed to this callback.
    *
-   * Callback invoked to resolve external buffer URIs referenced by the glTF asset.
-   * Receives a URI string and must return the corresponding binary data.
+   * Optional async callback invoked to resolve external buffer URIs referenced by the
+   * glTF asset (non-`data:` references found in `buffers[].uri`).
    * Required when loading plain `.gltf` files that reference external `.bin` files.
+   *
+   * The callback **must** return a `Promise` that resolves to the raw bytes of the
+   * referenced buffer. Rejections propagate directly from `loadGltf`.
+   *
+   * @param uri The raw URI string extracted from the glTF JSON, already validated
+   *   against the loader's URI whitelist and best-effort percent-decoded. If
+   *   percent-decoding fails due to invalid percent-encoding, the original URI string
+   *   (with invalid sequences preserved) may be passed instead. Do **not** perform
+   *   additional URI resolution or decoding inside this callback.
+   * @returns A `Promise` resolving to the buffer's raw bytes as an `ArrayBuffer`.
    */
   resolveUri?: (uri: string) => Promise<ArrayBuffer>;
   /**

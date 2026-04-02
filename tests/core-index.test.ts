@@ -15,21 +15,14 @@ describe('core root index exports', () => {
     expect(em.hasComponent(id, 'Mesh')).toBe(true);
   });
 
-  it('annotates DEFAULT_VERTEX_SOURCE barrel export with a JSDoc comment linking Material', () => {
-    expect(coreIndexSource).toMatch(/see \{@link Material\}[^]*?export \{ DEFAULT_VERTEX_SOURCE \}/);
-    expect(coreIndexSource).not.toContain('in Material.ts');
+  it('re-exports DEFAULT_VERTEX_SOURCE and DEFAULT_FRAGMENT_SOURCE together without duplicating JSDoc', () => {
+    expect(coreIndexSource).toContain('DEFAULT_VERTEX_SOURCE');
+    expect(coreIndexSource).toContain('DEFAULT_FRAGMENT_SOURCE');
+    expect(coreIndexSource).toMatch(/export \{[^}]*DEFAULT_VERTEX_SOURCE[^}]*DEFAULT_FRAGMENT_SOURCE[^}]*\}/);
   });
 
-  it('annotates DEFAULT_FRAGMENT_SOURCE barrel export with a JSDoc comment linking Material', () => {
-    expect(coreIndexSource).toMatch(/see \{@link Material\}[^]*?export \{ DEFAULT_FRAGMENT_SOURCE \}/);
-    expect(coreIndexSource).not.toContain('in Material.ts');
-  });
-
-  it('DEFAULT_VERTEX_SOURCE barrel export comment includes a @security note', () => {
-    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_VERTEX_SOURCE \}/);
-  });
-
-  it('DEFAULT_FRAGMENT_SOURCE barrel export comment includes a @security note', () => {
-    expect(coreIndexSource).toMatch(/\/\*\*[^]*?@security[^]*?\*\/\s*export \{ DEFAULT_FRAGMENT_SOURCE \}/);
+  it('does not duplicate @security documentation in the barrel re-export', () => {
+    expect(coreIndexSource).not.toMatch(/@security[^]*export \{[^}]*DEFAULT_VERTEX_SOURCE/);
+    expect(coreIndexSource).not.toMatch(/@security[^]*export \{[^}]*DEFAULT_FRAGMENT_SOURCE/);
   });
 });

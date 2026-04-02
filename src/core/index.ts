@@ -2,13 +2,7 @@ export { Renderer } from './Renderer';
 export { Time } from './Time';
 export { createShader, createProgram } from './ShaderUtils';
 export { ShaderCache } from './ShaderCache';
-export { Material } from './Material';
-/** Full GLSL source — see {@link Material} for usage examples.
- * @security Never pass user-controlled strings as GLSL source; see {@link Material} constructor. */
-export { DEFAULT_VERTEX_SOURCE } from './Material';
-/** Full GLSL source — see {@link Material} for usage examples.
- * @security Never pass user-controlled strings as GLSL source; see {@link Material} constructor. */
-export { DEFAULT_FRAGMENT_SOURCE } from './Material';
+export { Material, DEFAULT_VERTEX_SOURCE, DEFAULT_FRAGMENT_SOURCE } from './Material';
 export { loadGltf, parseContainer } from './GltfLoader';
 export type { GltfLoaderOptions } from './GltfLoader';
 export type {
